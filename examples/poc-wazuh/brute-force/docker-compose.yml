@@ -1,0 +1,16 @@
+version: '3.3'
+
+services:
+  ubuntu_ssh:
+    networks:
+      - shared-network
+    build:
+      context: .
+    ports:
+      - "2222:22"
+      - "8080:80"
+    restart: always
+
+networks:
+  shared-network:
+    external: true
