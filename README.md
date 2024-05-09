@@ -15,13 +15,9 @@ T-Guard is an innovative security operations center (SOC) solution that leverage
 - Docker and Linux basic.
 - Basic understanding of cybersecurity principles.
 
-## Installation
+## Installation and Usage
 
-Coming soon
-
-## Usage
-
-Coming soon
+https://docs.tguard.org/
 
 ## License
 
@@ -36,4 +32,4 @@ Coming soon
 
 ## Acknowledgments
 
-We would like to express our sincere gratitude to Japan International Cooperation Agency (JICA) for their generous support and funding of this project. Their commitment to the development of our T-Guard SOC Package has been instrumental in making this project a reality. We are thankful for the opportunity to collaborate with JICA and for their trust in our vision. This project would not have been possible without their support.
+We would like to express our sincere gratitude to Universitas Indonesia - Japan International Cooperation Agency (UI-JICA Project) for their generous support and funding for the development of our T-Guard SOC Package. It is really helpful in making this development becomes a reality. We are thankful for the opportunity to collaborate with UI and JICA especially for their trust in our vision. This development would not have been possible without their support.
