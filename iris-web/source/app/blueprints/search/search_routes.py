@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-#
 #  IRIS Source Code
 #  Copyright (C) 2021 - Airbus CyberSecurity (SAS)
 #  ir@cyberactionlab.net
@@ -27,6 +25,7 @@ from flask import url_for
 from sqlalchemy import and_
 
 from app.forms import SearchForm
+from app.iris_engine.access_control.utils import ac_flag_match_mask
 from app.iris_engine.utils.tracker import track_activity
 from app.models import Comments
 from app.models.authorization import Permissions
@@ -46,10 +45,9 @@ search_blueprint = Blueprint('search',
                              template_folder='templates')
 
 
-# CONTENT ------------------------------------------------
 @search_blueprint.route('/search', methods=['POST'])
 @ac_api_requires(Permissions.search_across_cases)
-def search_file_post(caseid: int):
+def search_file_post():
 
     jsdata = request.get_json()
     search_value = jsdata.get('search_value')
@@ -58,14 +56,6 @@ def search_file_post(caseid: int):
     search_condition = and_()
 
     track_activity("started a global search for {} on {}".format(search_value, search_type))
-
-    # if not ac_flag_match_mask(session['permissions'],  Permissions.search_across_all_cases.value):
-    #     user_search_limitations = ac_get_fast_user_cases_access(current_user.id)
-    #     if user_search_limitations:
-    #         search_condition = and_(Cases.case_id.in_(user_search_limitations))
-    #
-    #     else:
-    #         return response_success("Results fetched", [])
 
     if search_type == "ioc":
         res = Ioc.query.with_entities(
@@ -129,7 +119,8 @@ def search_file_post(caseid: int):
             Client.name.label('customer_name'),
             Cases.case_id
         ).join(
-            Comments.case,
+            Comments.case
+        ).join(
             Cases.client
         ).order_by(
             Client.name

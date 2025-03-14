@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-#
 #  IRIS Source Code
 #  contact@dfir-iris.org
 #
@@ -16,8 +14,9 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, write to the Free Software Foundation,
 #  Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+from app import db, ac_current_user_has_permission
 from app.models import Cases
-from app.models.authorization import Group
+from app.models.authorization import Group, UserClient, Permissions, CaseAccessLevel
 from app.models.authorization import GroupCaseAccess
 from app.models.authorization import Organisation
 from app.models.authorization import OrganisationCaseAccess
@@ -35,7 +34,8 @@ def manage_ac_audit_users_db():
         Cases.name,
         Cases.case_id
     ).join(
-        UserCaseAccess.case,
+        UserCaseAccess.case
+    ).join(
         UserCaseAccess.user
     ).all()
 
@@ -47,7 +47,8 @@ def manage_ac_audit_users_db():
         Cases.name,
         Cases.case_id
     ).join(
-        GroupCaseAccess.case,
+        GroupCaseAccess.case
+    ).join(
         GroupCaseAccess.group
     ).all()
 
@@ -69,3 +70,88 @@ def manage_ac_audit_users_db():
     return ret
 
 
+def check_ua_case_client(user_id: int, case_id: int) -> UserClient:
+    """Check if the user has access to the case, through the customer of the case
+       (in other words, check that the customer of the case is assigned to the user)
+
+    Args:
+        user_id (int): identifier of the user
+        case_id (int): identifier of the case
+
+    Returns:
+        UserClient: the user relationship with the customer of the case, if it is assigned to the user
+                    None otherwise
+    """
+    if ac_current_user_has_permission(Permissions.server_administrator):
+        # Return a dummy object
+        uc = UserClient()
+        uc.access_level = CaseAccessLevel.full_access.value
+        return uc
+
+    result = UserClient.query.filter(
+        UserClient.user_id == user_id,
+        Cases.case_id == case_id
+    ).join(Cases,
+           UserClient.client_id == Cases.client_id
+    ).first()
+
+    return result
+
+
+def get_client_users(client_id: int) -> list:
+    """Get users for a client
+
+    Args:
+        client_id (int): Client ID
+
+    Returns:
+        list: List of users
+    """
+    result = UserClient.query.filter(
+        UserClient.client_id == client_id
+    ).all()
+
+    return result
+
+
+def get_user_clients_id(user_id: int) -> list:
+    """Get clients for a user
+
+    Args:
+        user_id (int): User ID
+
+    Returns:
+        list: List of clients
+    """
+    filters = []
+    if not ac_current_user_has_permission(Permissions.server_administrator):
+        filters.append(UserClient.user_id == user_id)
+
+    result = UserClient.query.filter(
+        *filters
+    ).with_entities(
+        UserClient.client_id
+    ).all()
+
+    return [r[0] for r in result]
+
+
+def user_has_client_access(user_id: int, client_id: int) -> bool:
+    """Check if a user has access to a client
+
+    Args:
+        user_id (int): User ID
+        client_id (int): Client ID
+
+    Returns:
+        bool: True if the user has access to the client
+    """
+    if ac_current_user_has_permission(Permissions.server_administrator):
+        return True
+
+    result = UserClient.query.filter(
+        UserClient.user_id == user_id,
+        UserClient.client_id == client_id
+    ).first()
+
+    return result is not None

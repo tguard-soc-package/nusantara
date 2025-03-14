@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-#
 #  IRIS Source Code
 #  Copyright (C) 2021 - Airbus CyberSecurity (SAS) - DFIR-IRIS Team
 #  ir@cyberactionlab.net - contact@dfir-iris.org
@@ -67,7 +65,7 @@ from app.models import CaseStatus, ReviewStatusList
 from app.models import UserActivity
 from app.models.authorization import CaseAccessLevel
 from app.models.authorization import User
-from app.schema.marshables import TaskLogSchema, CaseSchema
+from app.schema.marshables import TaskLogSchema, CaseSchema, CaseDetailsSchema
 from app.util import ac_api_case_requires, add_obj_history_entry
 from app.util import ac_case_requires
 from app.util import ac_socket_requires
@@ -245,6 +243,13 @@ def export_case(caseid):
     return response_success('', data=export_case_json(caseid))
 
 
+@case_blueprint.route("/case/meta", methods=['GET'])
+@ac_api_case_requires(CaseAccessLevel.read_only, CaseAccessLevel.full_access)
+def meta_case(caseid):
+    case_details = get_case(caseid)
+    return response_success('', data= CaseDetailsSchema().dump(case_details))
+
+
 @case_blueprint.route('/case/tasklog/add', methods=['POST'])
 @ac_api_case_requires(CaseAccessLevel.full_access)
 def case_add_tasklog(caseid):
@@ -258,7 +263,7 @@ def case_add_tasklog(caseid):
         ua = track_activity(log_data.get('log_content'), caseid, user_input=True)
 
     except marshmallow.exceptions.ValidationError as e:
-        return response_error(msg="Data error", data=e.messages, status=400)
+        return response_error(msg="Data error", data=e.messages)
 
     return response_success("Log saved", data=ua)
 

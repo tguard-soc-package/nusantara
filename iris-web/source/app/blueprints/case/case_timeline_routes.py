@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-#
 #  IRIS Source Code
 #  Copyright (C) 2021 - Airbus CyberSecurity (SAS) - DFIR-IRIS Team
 #  ir@cyberactionlab.net - contact@dfir-iris.org
@@ -61,6 +59,7 @@ from app.datamgmt.states import get_timeline_state
 from app.datamgmt.states import update_timeline_state
 from app.forms import CaseEventForm
 from app.iris_engine.module_handler.module_handler import call_modules_hook
+from app.iris_engine.utils.collab import collab_notify
 from app.iris_engine.utils.common import parse_bf_date_format
 from app.iris_engine.utils.tracker import track_activity
 from app.models import CompromiseStatus
@@ -199,7 +198,7 @@ def case_comment_add(cur_id, caseid):
         return response_success("Event commented", data=comment_schema.dump(comment))
 
     except marshmallow.exceptions.ValidationError as e:
-        return response_error(msg="Data error", data=e.normalized_messages(), status=400)
+        return response_error(msg="Data error", data=e.normalized_messages())
 
 
 @case_timeline_blueprint.route('/case/timeline/state', methods=['GET'])
@@ -498,6 +497,7 @@ def case_filter_timeline(caseid):
         CasesEvent.event_in_summary,
         CasesEvent.event_in_graph,
         CasesEvent.event_is_flagged,
+        CasesEvent.parent_event_id,
         User.user,
         CasesEvent.event_added,
         EventCategory.name.label("category_name")
@@ -519,7 +519,7 @@ def case_filter_timeline(caseid):
             CaseEventsAssets.asset_id.in_(assets_id)
         )
 
-    assets_cache = CaseAssets.query.with_entities(
+    assets_cache = (CaseAssets.query.with_entities(
         CaseEventsAssets.event_id,
         CaseAssets.asset_id,
         CaseAssets.asset_name,
@@ -529,7 +529,8 @@ def case_filter_timeline(caseid):
         CaseAssets.asset_compromise_status_id
     ).filter(
         assets_cache_condition
-    ).join(CaseEventsAssets.asset, CaseAssets.asset_type).all()
+    ).join(CaseEventsAssets.asset)
+     .join(CaseAssets.asset_type).all())
 
     iocs_cache_condition = and_(
         CaseEventsIoc.case_id == caseid
@@ -682,6 +683,8 @@ def case_delete_event(cur_id, caseid):
 
     call_modules_hook('on_postload_event_delete', data=cur_id, caseid=caseid)
 
+    collab_notify(caseid, 'events', 'deletion', cur_id)
+
     track_activity(f"deleted event \"{event.event_title}\" in timeline", caseid)
 
     return response_success('Event ID {} deleted'.format(cur_id))
@@ -696,6 +699,8 @@ def event_flag(cur_id, caseid):
 
     event.event_is_flagged = not event.event_is_flagged
     db.session.commit()
+
+    collab_notify(caseid, 'events', 'flagged' if event.event_is_flagged else "un-flagged", cur_id)
 
     return response_success("Event flagged" if event.event_is_flagged else "Event unflagged", data=event)
 
@@ -715,7 +720,7 @@ def event_view(cur_id, caseid):
     output = event_schema.dump(event)
     output['event_assets'] = linked_assets
     output['event_iocs'] = linked_iocs
-    output['event_category_id'] = event.category[0].id
+    output['event_category_id'] = event.category[0].id if event.category else None
     output['event_comments_map'] = [c._asdict() for c in get_case_events_comments_count([cur_id])]
 
     return response_success(data=output)
@@ -804,10 +809,17 @@ def case_edit_event(cur_id, caseid):
         event = call_modules_hook('on_postload_event_update', data=event, caseid=caseid)
 
         track_activity(f"updated event \"{event.event_title}\"", caseid=caseid)
-        return response_success("Event updated", data=event_schema.dump(event))
+        event_dump = event_schema.dump(event)
+        collab_notify(case_id=caseid,
+                      object_type='events',
+                      action_type='updated',
+                      object_id=cur_id,
+                      object_data=event_dump)
+
+        return response_success("Event updated", data=event_dump)
 
     except marshmallow.exceptions.ValidationError as e:
-        return response_error(msg="Data error", data=e.normalized_messages(), status=400)
+        return response_error(msg="Data error", data=e.normalized_messages())
 
 
 @case_timeline_blueprint.route('/case/timeline/events/add/modal', methods=['GET'])
@@ -888,7 +900,7 @@ def case_add_event(caseid):
         return response_success("Event added", data=event_schema.dump(event))
 
     except marshmallow.exceptions.ValidationError as e:
-        return response_error(msg="Data error", data=e.normalized_messages(), status=400)
+        return response_error(msg="Data error", data=e.normalized_messages())
 
 
 @case_timeline_blueprint.route('/case/timeline/events/duplicate/<int:cur_id>', methods=['GET'])
@@ -951,7 +963,7 @@ def case_duplicate_event(cur_id, caseid):
         return response_success("Event duplicated", data=event_schema.dump(event))
 
     except marshmallow.exceptions.ValidationError as e:
-        return response_error(msg="Data error", data=e.normalized_messages(), status=400)
+        return response_error(msg="Data error", data=e.normalized_messages())
 
 
 @case_timeline_blueprint.route('/case/timeline/events/convert-date', methods=['POST'])
@@ -1042,7 +1054,7 @@ def case_events_upload_csv(caseid):
 
             if len(event_title) == 0:
                 return response_error(msg=f"Data error",
-                                      data={"Error": f"Event Title can not be empty.\nrow number: {line}"}, status=400)
+                                      data={"Error": f"Event Title can not be empty.\nrow number: {line}"})
 
             assets = []
             for asset_name in event_assets.split(";"):

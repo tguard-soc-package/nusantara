@@ -43,9 +43,8 @@ import {
 	Lightbulb as LightbulbIcon,
 } from "@mui/icons-material";
 
-//import { useAlert 
-
 import SearchField from '../components/Searchfield.jsx'
+
 const hoverColor = "#f85a3e"
 const hoverOutColor = "#e8eaf6"
 
@@ -156,9 +155,21 @@ const { globalUrl, setNotifications, notifications, isLoggedIn, removeCookie, ho
 		.then(() => {
 			// Log out anyway
 			removeCookie("session_token", {path: "/"})
+			removeCookie("__session", {path: "/"})
+			removeCookie("_session", {path: "/"})
+
 			removeCookie("session_token", {path: "/"})
+			removeCookie("__session", {path: "/"})
+			removeCookie("_session", {path: "/"})
+			
 			removeCookie("session_token", {path: "/"})
+			removeCookie("__session", {path: "/"})
+			removeCookie("_session", {path: "/"})
+
 			removeCookie("session_token", {path: "/"})
+			removeCookie("__session", {path: "/"})
+			removeCookie("_session", {path: "/"})
+
 			window.location.pathname = "/"
 		})
 		.catch(error => {
@@ -217,44 +228,44 @@ const { globalUrl, setNotifications, notifications, isLoggedIn, removeCookie, ho
 	const NotificationItem = (props) => {
 		const {data} = props
 
-    var image = "";
-    var orgName = "";
-    var orgId = "";
-    if (userdata.orgs !== undefined) {
-      const foundOrg = userdata.orgs.find((org) => org.id === data["org_id"]);
-      if (foundOrg !== undefined && foundOrg !== null) {
-        //position: "absolute", bottom: 5, right: -5,
-        const imageStyle = {
-          width: imagesize,
-          height: imagesize,
-          pointerEvents: "none",
-          marginLeft: data.creator_org !== undefined && data.creator_org.length > 0 ? 20 : 0,
-          borderRadius: 10,
-          border: foundOrg.id === userdata.active_org.id ? `3px solid ${boxColor}` : null,
-          cursor: "pointer",
-          marginRight: 10,
-        };
+		var image = "";
+		var orgName = "";
+		var orgId = "";
+		if (userdata.orgs !== undefined) {
+		  const foundOrg = userdata.orgs.find((org) => org.id === data["org_id"]);
+		  if (foundOrg !== undefined && foundOrg !== null) {
+			//position: "absolute", bottom: 5, right: -5,
+			const imageStyle = {
+			  width: imagesize,
+			  height: imagesize,
+			  pointerEvents: "none",
+			  marginLeft: data.creator_org !== undefined && data.creator_org.length > 0 ? 20 : 0,
+			  borderRadius: 10,
+			  border: foundOrg.id === userdata.active_org.id ? `3px solid ${boxColor}` : null,
+			  cursor: "pointer",
+			  marginRight: 10,
+			};
 
-        image =
-          foundOrg.image === "" ? (
-            <img
-              alt={foundOrg.name}
-              src={theme.palette.defaultImage}
-              style={imageStyle}
-            />
-          ) : (
-            <img
-              alt={foundOrg.name}
-              src={foundOrg.image}
-              style={imageStyle}
-              onClick={() => {}}
-            />
-          );
+			image =
+			  foundOrg.image === "" ? (
+				<img
+				  alt={foundOrg.name}
+				  src={theme.palette.defaultImage}
+				  style={imageStyle}
+				/>
+			  ) : (
+				<img
+				  alt={foundOrg.name}
+				  src={foundOrg.image}
+				  style={imageStyle}
+				  onClick={() => {}}
+				/>
+			  );
 
-        orgName = foundOrg.name;
-        orgId = foundOrg.id;
-      }
-    }
+			orgName = foundOrg.name;
+			orgId = foundOrg.id;
+		  }
+		}
 
 		return (
 			<Paper style={{backgroundColor: theme.palette.surfaceColor, width: notificationWidth, padding: 25, borderBottom: "1px solid rgba(255,255,255,0.4)"}}>
@@ -615,8 +626,8 @@ const { globalUrl, setNotifications, notifications, isLoggedIn, removeCookie, ho
 
 				</List>
 			</div>
-			<div style={{flex: 1, marginTop: 0,}}>
-				<SearchField serverside={serverside} userdata={userdata} />
+			<div style={{flex: 1, marginTop: 10,}}>
+				<SearchField globalUrl={globalUrl} serverside={serverside} userdata={userdata} />
 			</div>
 			<div style={{flex: 1, display: "flex", flexDirection: "row-reverse"}}>
 				<List style={{display: 'flex', flexDirection: 'row-reverse'}} component="nav">
@@ -747,7 +758,7 @@ const { globalUrl, setNotifications, notifications, isLoggedIn, removeCookie, ho
 						*/}
 					</List>
 				</div>
-				<div style={{flex: 1, marginTop: 0,}}>
+				<div style={{flex: 1, marginTop: 10,}}>
 					<SearchField serverside={serverside} userdata={userdata} />
 				</div>
 				<div style={{flex: 1, display: "flex", flexDirection: "row-reverse"}}>
@@ -880,6 +891,11 @@ const { globalUrl, setNotifications, notifications, isLoggedIn, removeCookie, ho
 												const namesplit = regionsplit[0].split("/")
 
 												regiontag = namesplit[namesplit.length - 1]
+												if (regiontag === "california") {
+													regiontag = "us"
+												} else if (regiontag === "frankfurt") {
+													regiontag = "fr"
+												}
 											}
 										}
 

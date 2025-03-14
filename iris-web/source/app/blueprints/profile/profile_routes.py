@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-#
 #  IRIS Source Code
 #  Copyright (C) 2021 - Airbus CyberSecurity (SAS)
 #  ir@cyberactionlab.net
@@ -19,7 +17,6 @@
 #  Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 import marshmallow
-# IMPORTS ------------------------------------------------
 import secrets
 from flask import Blueprint
 from flask import redirect
@@ -30,8 +27,8 @@ from flask import url_for
 from flask_login import current_user
 from flask_wtf import FlaskForm
 
-from app import db
-from app.datamgmt.manage.manage_srv_settings_db import get_srv_settings
+from app import db, app
+from app.datamgmt.manage.manage_srv_settings_db import get_srv_settings, get_server_settings_as_dict
 from app.datamgmt.manage.manage_users_db import get_user
 from app.datamgmt.manage.manage_users_db import get_user_primary_org
 from app.datamgmt.manage.manage_users_db import update_user
@@ -40,7 +37,8 @@ from app.iris_engine.access_control.utils import ac_get_effective_permissions_of
 from app.iris_engine.access_control.utils import ac_recompute_effective_ac
 from app.iris_engine.utils.tracker import track_activity
 from app.models.authorization import Permissions
-from app.schema.marshables import UserSchema, BasicUserSchema
+from app.schema.marshables import UserSchema
+from app.schema.marshables import BasicUserSchema
 from app.util import ac_api_requires
 from app.util import ac_requires
 from app.util import endpoint_deprecated
@@ -59,12 +57,15 @@ def user_settings(caseid, url_redir):
     if url_redir:
         return redirect(url_for('profile.user_settings', cid=caseid))
 
-    return render_template('profile.html')
+    if 'SERVER_SETTINGS' not in app.config:
+        app.config['SERVER_SETTINGS'] = get_server_settings_as_dict()
+
+    return render_template('profile.html', mfa_enabled=app.config['SERVER_SETTINGS']['enforce_mfa'])
 
 
 @profile_blueprint.route('/user/token/renew', methods=['GET'])
-@ac_api_requires(no_cid_required=True)
-def user_renew_api(caseid):
+@ac_api_requires()
+def user_renew_api():
 
     user = get_user(current_user.id)
     user.api_key = secrets.token_urlsafe(nbytes=64)
@@ -81,8 +82,8 @@ def user_is_admin(caseid):
 
 
 @profile_blueprint.route('/user/has-permission', methods=['POST'])
-@ac_api_requires(no_cid_required=True)
-def user_has_permission(caseid):
+@ac_api_requires()
+def user_has_permission():
 
     req_js = request.json
     if not req_js:
@@ -118,8 +119,8 @@ def update_pwd_modal(caseid, url_redir):
 
 
 @profile_blueprint.route('/user/update', methods=['POST'])
-@ac_api_requires(no_cid_required=True)
-def update_user_view(caseid):
+@ac_api_requires()
+def update_user_view():
     try:
         user = get_user(current_user.id)
         if not user:
@@ -139,18 +140,18 @@ def update_user_view(caseid):
         db.session.commit()
 
         if cuser:
-            track_activity("user {} updated itself".format(user.user), caseid=caseid)
+            track_activity("user {} updated itself".format(user.user))
             return response_success("User updated", data=user_schema.dump(user))
 
         return response_error("Unable to update user for internal reasons")
 
     except marshmallow.exceptions.ValidationError as e:
-        return response_error(msg="Data error", data=e.messages, status=400)
+        return response_error(msg="Data error", data=e.messages)
 
 
 @profile_blueprint.route('/user/theme/set/<string:theme>', methods=['GET'])
-@ac_api_requires(no_cid_required=True)
-def profile_set_theme(theme, caseid):
+@ac_api_requires()
+def profile_set_theme(theme):
     if theme not in ['dark', 'light']:
         return response_error('Invalid data')
 
@@ -165,8 +166,8 @@ def profile_set_theme(theme, caseid):
 
 
 @profile_blueprint.route('/user/deletion-prompt/set/<string:val>', methods=['GET'])
-@ac_api_requires(no_cid_required=True)
-def profile_set_deletion_prompt(val, caseid):
+@ac_api_requires()
+def profile_set_deletion_prompt(val):
     if val not in ['true', 'false']:
         return response_error('Invalid data')
 
@@ -181,8 +182,8 @@ def profile_set_deletion_prompt(val, caseid):
 
 
 @profile_blueprint.route('/user/mini-sidebar/set/<string:val>', methods=['GET'])
-@ac_api_requires(no_cid_required=True)
-def profile_set_minisidebar(val, caseid):
+@ac_api_requires()
+def profile_set_minisidebar(val):
     if val not in ['true', 'false']:
         return response_error('Invalid data')
 
@@ -197,8 +198,8 @@ def profile_set_minisidebar(val, caseid):
 
 
 @profile_blueprint.route('/user/refresh-permissions', methods=['GET'])
-@ac_api_requires(no_cid_required=True)
-def profile_refresh_permissions_and_ac(caseid):
+@ac_api_requires()
+def profile_refresh_permissions_and_ac():
 
     user = get_user(current_user.id)
     if not user:
@@ -211,8 +212,8 @@ def profile_refresh_permissions_and_ac(caseid):
 
 
 @profile_blueprint.route('/user/whoami', methods=['GET'])
-@ac_api_requires(no_cid_required=True)
-def profile_whoami(caseid):
+@ac_api_requires()
+def profile_whoami():
     """
     Returns the current user's profile
     """

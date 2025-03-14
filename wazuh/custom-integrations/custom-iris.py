@@ -66,7 +66,7 @@ payload = json.dumps({
     "alert_description": alert_details,
     "alert_source": "Wazuh",
     "alert_source_ref": alert_json.get("id", "Unknown ID"),
-    "alert_source_link": "https://WAZUH-IP-OR-FQDN/app/wazuh",  # Replace with actual Wazuh URL
+    "alert_source_link": "https://WAZUH-IP-OR-FQDN/app/wz-home",  # Replace with actual Wazuh URL
     "alert_severity_id": severity,
     "alert_status_id": 2,  # 'New' status
     "alert_source_event_time": alert_json.get("timestamp", "Unknown Timestamp"),

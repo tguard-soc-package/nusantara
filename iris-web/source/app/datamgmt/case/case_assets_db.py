@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-#
 #  IRIS Source Code
 #  Copyright (C) 2021 - Airbus CyberSecurity (SAS)
 #  ir@cyberactionlab.net
@@ -77,7 +75,9 @@ def get_assets(caseid):
     ).filter(
         CaseAssets.case_id == caseid,
     ).join(
-        CaseAssets.asset_type, CaseAssets.analysis_status
+        CaseAssets.asset_type
+    ).join(
+        CaseAssets.analysis_status
     ).all()
 
     return assets
@@ -368,7 +368,8 @@ def get_case_asset_comment(asset_id, comment_id):
         User.name,
         User.user
     ).join(
-        AssetComments.comment,
+        AssetComments.comment
+    ).join(
         Comments.user
     ).first()
 

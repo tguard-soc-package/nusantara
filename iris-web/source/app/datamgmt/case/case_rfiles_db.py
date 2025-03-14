@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-#
 #  IRIS Source Code
 #  Copyright (C) 2021 - Airbus CyberSecurity (SAS)
 #  ir@cyberactionlab.net
@@ -33,18 +31,11 @@ from app.models.authorization import User
 
 
 def get_rfiles(caseid):
-    crf = CaseReceivedFile.query.with_entities(
-        CaseReceivedFile.id,
-        CaseReceivedFile.file_uuid,
-        CaseReceivedFile.filename,
-        CaseReceivedFile.date_added,
-        CaseReceivedFile.file_hash,
-        CaseReceivedFile.file_description,
-        CaseReceivedFile.file_size,
-        User.name.label('username')
-    ).filter(
+    crf = CaseReceivedFile.query.filter(
         CaseReceivedFile.case_id == caseid
-    ).join(CaseReceivedFile.user).order_by(desc(CaseReceivedFile.date_added)).all()
+    ).order_by(
+        desc(CaseReceivedFile.date_added)
+    ).all()
 
     return crf
 
@@ -150,7 +141,8 @@ def get_case_evidence_comment(evidence_id, comment_id):
         User.name,
         User.user
     ).join(
-        EvidencesComments.comment,
+        EvidencesComments.comment
+    ).join(
         Comments.user
     ).first()
 

@@ -1,14 +1,24 @@
-# Installation guide
-Installation of Shuffle is currently only available in docker. Looking for how to update Shuffle? Check the [updating guide](https://shuffler.io/docs/configuration#updating_shuffle)
+<h1 align="center">
 
-This document outlines an introduction environment which is not scalable. [Read here](https://shuffler.io/docs/configuration#production_readiness) for information on production readiness. This also includes system requirements and configurations for Swarm or Kubernetes. 
+[![Shuffle Logo](https://github.com/Shuffle/Shuffle/blob/main/frontend/public/images/Shuffle_logo_new.png)](https://shuffler.io)
+
+Shuffle Installation
+
+</h1>
+
+Installation of Shuffle is currently available for [docker](https://shuffler.io/docs/configuration#production-readiness) and [kubernetes](https://shuffler.io/docs/configuration#Kubernetes). 
+
+- Looking to run workflows onprem, but don't want to run the entire stack? Looks into [Environments & Orborus hosting Onprem](https://shuffler.io/docs/organizations#Environments)
+- Looking for how to update Shuffle? Check the [updating guide](https://shuffler.io/docs/configuration#updating_shuffle)
+
+This document outlines an introduction environment which is **not** scalable. [Read here](https://shuffler.io/docs/configuration#production_readiness) for information on production readiness and scalability. This also includes system requirements and configurations for **Docker Swarm** or **Kubernetes**. 
 
 # Docker - *nix
-The Docker setup is done with docker-compose 
+The Docker setup is the default setup, and is ran with docker compose. This is [NOT a scalable build](https://shuffler.io/docs/configuration#production-readiness) without changes.
 
 **PS: if you're setting up Shuffle on Windows, go to the next step (Windows Docker setup)**
 
-1. Make sure you have [Docker](https://docs.docker.com/get-docker/) and [docker-compose](https://docs.docker.com/compose/install/) installed, and that you have a minimum of **2Gb of RAM** available.
+1. Make sure you have [Docker](https://docs.docker.com/get-docker/) installed, and that you have a minimum of **2Gb of RAM** available.
 2. Download Shuffle
 ```bash
 git clone https://github.com/Shuffle/Shuffle
@@ -25,7 +35,7 @@ sudo swapoff -a                           # Disable swap
 
 4. Run docker-compose.
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 5. Recommended for Opensearch to work well
@@ -33,7 +43,7 @@ docker-compose up -d
 sudo sysctl -w vm.max_map_count=262144             # https://www.elastic.co/guide/en/elasticsearch/reference/current/vm-max-map-count.html
 ```
 
-When you're done, skip to the [After installation](#after-installation) step below.
+When you're done, go to the [After installation](#after-installation) step below.
 
 ## Windows with WSL  
 This step is for setting up with Docker on windows from scratch.
@@ -50,13 +60,15 @@ This step is for setting up with Docker on windows from scratch.
 OUTER_HOSTNAME=YOUR.IP.HERE
 ```
 
-6. Run docker-compose
+5. Run docker compose
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
-### Configurations (proxies, default users etc.)
+### Configurations (high availability, scale, proxies, default users etc.)
 https://shuffler.io/docs/configuration
+
+![architecture](https://github.com/frikky/Shuffle/raw/main/frontend/src/assets/img/shuffle_architecture.png)
 
 ### After installation 
 1. After installation, go to http://localhost:3001 (or your servername - https is on port 3443)
@@ -115,8 +127,8 @@ Large portions of the backend is written in another repository - [shuffle-shared
 ## Database - Opensearch 
 Make sure this is running through the docker-compose, and that the backend points to it with SHUFFLE_OPENSEARCH_URL defined.
 
-So essentially, what that means is:
-1. Make sure you have docker-compose installed
+What it means:
+1. Make sure you have docker compose installed
 2. Make sure you have the docker-compose.yml file from this repository
 3. Run `docker-compose up opensearch -d`
 

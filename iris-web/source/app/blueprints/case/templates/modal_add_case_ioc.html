@@ -49,7 +49,7 @@
                                     {{ form.ioc_type_id(class="selectpicker pl--6 col-10") }}
                                 </div>
                                 <div class="col-6">
-                                    <label for="ioc_type" class="mr-4">TLP *
+                                    <label for="ioc_tlp" class="mr-4">TLP *
                                     </label>
                                     {{ form.ioc_tlp_id(class="selectpicker pl--6 col-10") }}
                                 </div>
@@ -85,7 +85,7 @@
                                     </div>
                                     <div class="row" style="margin-left:0px;">
                                         <div class="col-12" id="container_ioc_desc_content">
-                                            <div id="ioc_description" class="mr-2" data-theme="{% if current_user.in_dark_mode %}dark{% else %}light{% endif %}">{% if ioc and ioc.ioc_description %}{{ ioc.ioc_description  }}{% endif %}</div>
+                                            <div id="ioc_description" contenteditable="true" spellcheck="true" class="mr-2" data-theme="{% if current_user.in_dark_mode %}dark{% else %}light{% endif %}">{% if ioc and ioc.ioc_description %}{{ ioc.ioc_description  }}{% endif %}</div>
                                             <textarea id="ioc_desc_content" rows="10" cols="82" style="display: none"></textarea>
                                         </div>
                                         <div class="col-12" id="container_ioc_description" style="display:none">
@@ -123,10 +123,7 @@
     </div>
 <script>
     $('form#form_new_ioc').validate();
-    $('#ioc_tags').amsifySuggestags({
-        printValues: false,
-        suggestions: [ {% for tag in tags %} '{{ tag }}', {% endfor %} ]
-    });
+    set_suggest_tags('ioc_tags')
 
     $('#ioc_type_id').selectpicker({
         liveSearch: true,

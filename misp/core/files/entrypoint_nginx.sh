@@ -8,15 +8,7 @@ term_proc() {
 
 trap term_proc SIGTERM
 
-[ -z "$MYSQL_HOST" ] && MYSQL_HOST=db
-[ -z "$MYSQL_PORT" ] && MYSQL_PORT=3306
-[ -z "$MYSQL_USER" ] && MYSQL_USER=misp
-[ -z "$MYSQL_PASSWORD" ] && MYSQL_PASSWORD=example
-[ -z "$MYSQL_DATABASE" ] && MYSQL_DATABASE=misp
-[ -z "$MYSQLCMD" ] && export MYSQLCMD="mysql -u $MYSQL_USER -p$MYSQL_PASSWORD -P $MYSQL_PORT -h $MYSQL_HOST -r -N $MYSQL_DATABASE"
-[ -z "$CRON_USER_ID" ] && export CRON_USER_ID="1"
-[ -z "$BASE_URL" ] && export BASE_URL="https://localhost"
-[ -z "$DISABLE_IPV6" ] && export DISABLE_IPV6=false
+MYSQLCMD="mysql -u $MYSQL_USER -p$MYSQL_PASSWORD -P $MYSQL_PORT -h $MYSQL_HOST -r -N $MYSQL_DATABASE"
 
 init_mysql(){
     # Test when MySQL is ready....
@@ -65,7 +57,8 @@ init_misp_data_files(){
     [ -f $MISP_APP_CONFIG_PATH/bootstrap.php ] || dd if=$MISP_APP_CONFIG_PATH.dist/bootstrap.default.php of=$MISP_APP_CONFIG_PATH/bootstrap.php
     [ -f $MISP_APP_CONFIG_PATH/database.php ] || dd if=$MISP_APP_CONFIG_PATH.dist/database.default.php of=$MISP_APP_CONFIG_PATH/database.php
     [ -f $MISP_APP_CONFIG_PATH/core.php ] || dd if=$MISP_APP_CONFIG_PATH.dist/core.default.php of=$MISP_APP_CONFIG_PATH/core.php
-    [ -f $MISP_APP_CONFIG_PATH/config.php ] || dd if=$MISP_APP_CONFIG_PATH.dist/config.default.php of=$MISP_APP_CONFIG_PATH/config.php
+    [ -f $MISP_APP_CONFIG_PATH/config.php.template ] || dd if=$MISP_APP_CONFIG_PATH.dist/config.default.php of=$MISP_APP_CONFIG_PATH/config.php.template
+    [ -f $MISP_APP_CONFIG_PATH/config.php ] || echo -e "<?php\n\$config=array();\n?>" > $MISP_APP_CONFIG_PATH/config.php
     [ -f $MISP_APP_CONFIG_PATH/email.php ] || dd if=$MISP_APP_CONFIG_PATH.dist/email.php of=$MISP_APP_CONFIG_PATH/email.php
     [ -f $MISP_APP_CONFIG_PATH/routes.php ] || dd if=$MISP_APP_CONFIG_PATH.dist/routes.php of=$MISP_APP_CONFIG_PATH/routes.php
 
@@ -91,7 +84,7 @@ class EmailConfig {
     public \$default = array(
         'transport'     => 'Smtp',
         'from'          => array('misp-dev@admin.test' => 'Misp DEV'),
-        'host'          => 'mail',
+        'host'          => '$SMTP_FQDN',
         'port'          => 25,
         'timeout'       => 30,
         'client'        => null,
@@ -100,7 +93,7 @@ class EmailConfig {
     public \$smtp = array(
         'transport'     => 'Smtp',
         'from'          => array('misp-dev@admin.test' => 'Misp DEV'),
-        'host'          => 'mail',
+        'host'          => '$SMTP_FQDN',
         'port'          => 25,
         'timeout'       => 30,
         'client'        => null,
@@ -126,7 +119,7 @@ class EmailConfig {
         'attachments'   => null,
         'emailFormat'   => null,
         'transport'     => 'Smtp',
-        'host'          => 'mail',
+        'host'          => '$SMTP_FQDN',
         'port'          => 25,
         'timeout'       => 30,
         'client'        => null,
@@ -147,7 +140,7 @@ EOT
 
 update_misp_data_files(){
     for DIR in $(ls /var/www/MISP/app/files.dist); do
-        if [ "$DIR" = "certs" ]; then
+        if [ "$DIR" = "certs" ] || [ "$DIR" = "img" ] || [ "$DIR" == "taxonomies" ] ; then
             echo "... rsync -azh \"/var/www/MISP/app/files.dist/$DIR\" \"/var/www/MISP/app/files/\""
             rsync -azh "/var/www/MISP/app/files.dist/$DIR" "/var/www/MISP/app/files/"
         else
@@ -197,7 +190,7 @@ flip_nginx() {
 
     # must be valid for all roots
     echo "... nginx docroot set to ${NGINX_DOC_ROOT}"
-    sed -i "s|root.*var/www.*|root ${NGINX_DOC_ROOT};|" /etc/nginx/sites-available/misp
+    sed -i "s|root.*var/www.*|root ${NGINX_DOC_ROOT};|" /etc/nginx/includes/misp
 
     if [[ "$reload" = "true" ]]; then
         echo "... nginx reloaded"
@@ -206,31 +199,57 @@ flip_nginx() {
 }
 
 init_nginx() {
+    # Adjust timeouts
+    echo "... adjusting 'fastcgi_read_timeout' to ${FASTCGI_READ_TIMEOUT}"
+    sed -i "s/fastcgi_read_timeout .*;/fastcgi_read_timeout ${FASTCGI_READ_TIMEOUT};/" /etc/nginx/includes/misp
+    echo "... adjusting 'fastcgi_send_timeout' to ${FASTCGI_SEND_TIMEOUT}"
+    sed -i "s/fastcgi_send_timeout .*;/fastcgi_send_timeout ${FASTCGI_SEND_TIMEOUT};/" /etc/nginx/includes/misp
+    echo "... adjusting 'fastcgi_connect_timeout' to ${FASTCGI_CONNECT_TIMEOUT}"
+    sed -i "s/fastcgi_connect_timeout .*;/fastcgi_connect_timeout ${FASTCGI_CONNECT_TIMEOUT};/" /etc/nginx/includes/misp
+
     # Testing for files also test for links, and generalize better to mounted files
     if [[ ! -f "/etc/nginx/sites-enabled/misp80" ]]; then
         echo "... enabling port 80 redirect"
-        if [[ "$DISABLE_IPV6" = "true" ]]; then
-            sed -i "/\[::\]/d" /etc/nginx/sites-available/misp80
-        fi
         ln -s /etc/nginx/sites-available/misp80 /etc/nginx/sites-enabled/misp80
     else
-        echo "... port 80 already configured"
+        echo "... port 80 already enabled"
+    fi
+    if [[ "$DISABLE_IPV6" = "true" ]]; then
+        echo "... disabling IPv6 on port 80"
+        sed -i "s/[^#] listen \[/  # listen \[/" /etc/nginx/sites-enabled/misp80
+    else
+        echo "... enabling IPv6 on port 80"
+        sed -i "s/# listen \[/listen \[/" /etc/nginx/sites-enabled/misp80
+    fi
+    if [[ "$DISABLE_SSL_REDIRECT" = "true" ]]; then
+        echo "... disabling SSL redirect"
+        sed -i "s/[^#] return /  # return /" /etc/nginx/sites-enabled/misp80
+        sed -i "s/# include /include /" /etc/nginx/sites-enabled/misp80
+    else
+        echo "... enabling SSL redirect"
+        sed -i "s/[^#] include /  # include /" /etc/nginx/sites-enabled/misp80
+        sed -i "s/# return /return /" /etc/nginx/sites-enabled/misp80
     fi
 
     # Testing for files also test for links, and generalize better to mounted files
-    if [[ ! -f "/etc/nginx/sites-enabled/misp" ]]; then
+    if [[ ! -f "/etc/nginx/sites-enabled/misp443" ]]; then
         echo "... enabling port 443"
-        if [[ "$DISABLE_IPV6" = "true" ]]; then
-            sed -i "/\[::\]/d" /etc/nginx/sites-available/misp
-        fi
-        ln -s /etc/nginx/sites-available/misp /etc/nginx/sites-enabled/misp
+        ln -s /etc/nginx/sites-available/misp443 /etc/nginx/sites-enabled/misp443
     else
-        echo "... port 443 already configured"
+        echo "... port 443 already enabled"
+    fi
+    if [[ "$DISABLE_IPV6" = "true" ]]; then
+        echo "... disabling IPv6 on port 443"
+        sed -i "s/[^#] listen \[/  # listen \[/" /etc/nginx/sites-enabled/misp443
+    else
+        echo "... enabling IPv6 on port 443"
+        sed -i "s/# listen \[/listen \[/" /etc/nginx/sites-enabled/misp443
     fi
     
     if [[ ! -f /etc/nginx/certs/cert.pem || ! -f /etc/nginx/certs/key.pem ]]; then
         echo "... generating new self-signed TLS certificate"
-        openssl req -x509 -subj '/CN=localhost' -nodes -newkey rsa:4096 -keyout /etc/nginx/certs/key.pem -out /etc/nginx/certs/cert.pem -days 365
+        openssl req -x509 -subj '/CN=localhost' -nodes -newkey rsa:4096 -keyout /etc/nginx/certs/key.pem -out /etc/nginx/certs/cert.pem -days 365 \
+            -addext "subjectAltName = DNS:localhost, IP:127.0.0.1, IP:::1"
     else
         echo "... TLS certificates found"
     fi
@@ -267,6 +286,9 @@ if [[ -x /custom/files/customize_misp.sh ]]; then
     echo "INIT | Customize MISP installation ..."
     /custom/files/customize_misp.sh
 fi
+
+# Restart PHP workers
+supervisorctl restart php-fpm
 
 # Wait for it
 wait "$master_pid"

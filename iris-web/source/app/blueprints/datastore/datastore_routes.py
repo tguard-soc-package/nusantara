@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-#
-#
 #  IRIS Source Code
 #  Copyright (C) 2022 - DFIR IRIS Team
 #  contact@dfir-iris.org
@@ -113,6 +110,22 @@ def datastore_add_file_modal(cur_id: int, caseid: int, url_redir: bool):
     form = ModalDSFileForm()
 
     return render_template("modal_ds_file.html", form=form, file=None, dsp=dsp)
+
+
+@datastore_blueprint.route('/datastore/file/add/<int:cur_id>/multi-modal', methods=['GET'])
+@ac_case_requires(CaseAccessLevel.full_access)
+def datastore_add_multi_files_modal(cur_id: int, caseid: int, url_redir: bool):
+
+    if url_redir:
+        return redirect(url_for('index.index', cid=caseid, redirect=True))
+
+    dsp = datastore_get_path_node(cur_id, caseid)
+    if not dsp:
+        return response_error('Invalid path node for this case')
+
+    form = ModalDSFileForm()
+
+    return render_template("modal_ds_multi_files.html", form=form, file=None, dsp=dsp)
 
 
 @datastore_blueprint.route('/datastore/filter-help/modal', methods=['GET'])
@@ -285,16 +298,18 @@ def datastore_view_file(cur_id: int, caseid: int):
         return response_error('Unable to get requested file ID', data=dsf)
 
     if dsf.file_is_ioc or dsf.file_password:
-        dsf.file_original_name += ".zip"
+        destination_name = dsf.file_original_name + ".zip"
+    else:
+        destination_name = dsf.file_original_name
 
     if not Path(dsf.file_local_name).is_file():
         return response_error(f'File {dsf.file_local_name} does not exists on the server. '
                               f'Update or delete virtual entry')
 
-    resp = send_file(dsf.file_local_name, as_attachment=True,
-                     download_name=dsf.file_original_name)
+    resp = send_file(dsf.file_local_name, as_attachment=False,
+                     download_name=destination_name)
 
-    track_activity(f"File \"{dsf.file_original_name}\" downloaded", caseid=caseid, display_in_ui=False)
+    track_activity(f"File \"{destination_name}\" downloaded", caseid=caseid, display_in_ui=False)
     return resp
 
 

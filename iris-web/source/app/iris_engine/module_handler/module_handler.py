@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-#
 #  IRIS Source Code
 #  Copyright (C) 2022 - DFIR IRIS Team
 #  contact@dfir-iris.org
@@ -494,7 +492,7 @@ def task_hook_wrapper(self, module_name, hook_name, hook_ui_name, data, init_use
     return task_status
 
 
-def call_modules_hook(hook_name: str, data: any, caseid: int, hook_ui_name: str = None, module_name: str = None) -> any:
+def call_modules_hook(hook_name: str, data: any, caseid: int = None, hook_ui_name: str = None, module_name: str = None) -> any:
     """
     Calls modules which have registered the specified hook
 
@@ -534,8 +532,7 @@ def call_modules_hook(hook_name: str, data: any, caseid: int, hook_ui_name: str 
         IrisModule.module_name,
         IrisModuleHook.manual_hook_ui_name
     ).filter(condition).join(
-        IrisModuleHook.module,
-        IrisModuleHook.hook
+        IrisModule, IrisModuleHook.module_id == IrisModule.id
     ).all()
 
     for module in modules:

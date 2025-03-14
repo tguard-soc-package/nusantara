@@ -1,4 +1,4 @@
-version: '3'
+#version: '3'
 services:
   # This is capable to relay via gmail, Amazon SES, or generic relays
   # See: https://hub.docker.com/r/ixdotai/smtp
@@ -12,7 +12,14 @@ services:
       - "SMARTHOST_ALIASES=${SMARTHOST_ALIASES}"
 
   redis:
-    image: redis:7.2
+    image: valkey/valkey:7.2
+    command: "--requirepass ${REDIS_PASSWORD:-redispassword}"
+    healthcheck:
+      test: "valkey-cli -a ${REDIS_PASSWORD:-redispassword} ping || exit 1"
+      interval: 2s
+      timeout: 1s
+      retries: 3
+      start_period: 30s
 
   db:
     # We use MariaDB because it supports ARM and has the expected collations
@@ -27,15 +34,23 @@ services:
       - mysql_data:/var/lib/mysql
     cap_add:
       - SYS_NICE  # CAP_SYS_NICE Prevent runaway mysql log
+    healthcheck:
+      test: mysqladmin --user=$$MYSQL_USER --password=$$MYSQL_PASSWORD status
+      interval: 2s
+      timeout: 1s
+      retries: 3
+      start_period: 30s
 
   misp-core:
-    image: ghcr.io/misp/misp-docker/misp-core:latest
+    image: ghcr.io/misp/misp-docker/misp-core:${CORE_TAG}
+    cap_add:
+      - CAP_AUDIT_WRITE
     build:
       context: core/.
       args:
-          - CORE_TAG=${CORE_TAG}
+          - CORE_TAG=${CORE_TAG:?Missing .env file, see README.md for instructions}
           - CORE_COMMIT=${CORE_COMMIT}
-          - PHP_VER=${PHP_VER}
+          - PHP_VER=${PHP_VER:?Missing .env file, see README.md for instructions}
           - PYPI_REDIS_VERSION=${PYPI_REDIS_VERSION}
           - PYPI_LIEF_VERSION=${PYPI_LIEF_VERSION}
           - PYPI_PYDEEP2_VERSION=${PYPI_PYDEEP2_VERSION}
@@ -45,10 +60,21 @@ services:
           - PYPI_MIXBOX_VERSION=${PYPI_MIXBOX_VERSION}
           - PYPI_CYBOX_VERSION=${PYPI_CYBOX_VERSION}
           - PYPI_PYMISP_VERSION=${PYPI_PYMISP_VERSION}
+          - PYPI_MISP_STIX_VERSION=${PYPI_MISP_STIX_VERSION}
     depends_on:
-      - redis
-      - db
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: curl -ks ${BASE_URL:-https://localhost}/users/heartbeat > /dev/null || exit 1
+      interval: 2s
+      timeout: 1s
+      retries: 3
+      start_period: 30s
+      start_interval: 30s
     ports:
+      - "80:80"
       - "1443:443"
     volumes:
       - "./configs/:/var/www/MISP/app/Config/"
@@ -64,6 +90,9 @@ services:
       - "BASE_URL=${BASE_URL}"
       - "CRON_USER_ID=${CRON_USER_ID}"
       - "DISABLE_IPV6=${DISABLE_IPV6}"
+      - "DISABLE_SSL_REDIRECT=${DISABLE_SSL_REDIRECT}"
+      - "ENABLE_DB_SETTINGS=${ENABLE_DB_SETTINGS}"
+      - "ENCRYPTION_KEY=${ENCRYPTION_KEY}"
       # standard settings
       - "ADMIN_EMAIL=${ADMIN_EMAIL}"
       - "ADMIN_PASSWORD=${ADMIN_PASSWORD}"
@@ -95,6 +124,25 @@ services:
       - "LDAP_OPT_PROTOCOL_VERSION=${LDAP_OPT_PROTOCOL_VERSION}"
       - "LDAP_OPT_NETWORK_TIMEOUT=${LDAP_OPT_NETWORK_TIMEOUT}"
       - "LDAP_OPT_REFERRALS=${LDAP_OPT_REFERRALS}"
+      # AAD authentication settings
+      - "AAD_ENABLE=${AAD_ENABLE}"
+      - "AAD_CLIENT_ID=${AAD_CLIENT_ID}"
+      - "AAD_TENANT_ID=${AAD_TENANT_ID}"
+      - "AAD_CLIENT_SECRET=${AAD_CLIENT_SECRET}"
+      - "AAD_REDIRECT_URI=${AAD_REDIRECT_URI}"
+      - "AAD_PROVIDER=${AAD_PROVIDER}"
+      - "AAD_PROVIDER_USER=${AAD_PROVIDER_USER}"
+      - "AAD_MISP_USER=${AAD_MISP_USER}"
+      - "AAD_MISP_ORGADMIN=${AAD_MISP_ORGADMIN}"
+      - "AAD_MISP_SITEADMIN=${AAD_MISP_SITEADMIN}"
+      - "AAD_CHECK_GROUPS=${AAD_CHECK_GROUPS}"
+      # Proxy settings
+      - "PROXY_ENABLE=${PROXY_ENABLE}"
+      - "PROXY_HOST=${PROXY_HOST}"
+      - "PROXY_PORT=${PROXY_PORT}"
+      - "PROXY_METHOD=${PROXY_METHOD}"
+      - "PROXY_USER=${PROXY_USER}"
+      - "PROXY_PASSWORD=${PROXY_PASSWORD}"
       # sync server settings (see https://www.misp-project.org/openapi/#tag/Servers for more options)
       - "SYNCSERVERS=${SYNCSERVERS}"
       - |
@@ -104,6 +152,7 @@ services:
           "name": "${SYNCSERVERS_1_NAME}",
           "authkey": "${SYNCSERVERS_1_KEY}",
           "url": "${SYNCSERVERS_1_URL}",
+          "pull_rules": "${SYNCSERVERS_1_PULL_RULES}",
           "pull": true
         }
       # mysql settings
@@ -112,19 +161,40 @@ services:
       - "MYSQL_USER=${MYSQL_USER:-misp}"
       - "MYSQL_PASSWORD=${MYSQL_PASSWORD:-example}"
       - "MYSQL_DATABASE=${MYSQL_DATABASE:-misp}"
+      # redis settings
+      - "REDIS_HOST=${REDIS_HOST:-redis}"
+      - "REDIS_PORT=${REDIS_PORT:-6379}"
+      - "REDIS_PASSWORD=${REDIS_PASSWORD:-redispassword}"
+      # Debug setting 
+      - "DEBUG=${DEBUG}"
+      # SMTP setting
+      - "SMTP_FQDN=${SMTP_FQDN}"
+      # NGINX settings
+      - "FASTCGI_READ_TIMEOUT=${FASTCGI_READ_TIMEOUT:-300s}"
+      - "FASTCGI_SEND_TIMEOUT=${FASTCGI_SEND_TIMEOUT:-300s}"
+      - "FASTCGI_CONNECT_TIMEOUT=${FASTCGI_CONNECT_TIMEOUT:-300s}"
+      # PHP settings
+      - "PHP_MEMORY_LIMIT=${PHP_MEMORY_LIMIT:-2048M}"
+      - "PHP_MAX_EXECUTION_TIME=${PHP_MAX_EXECUTION_TIME:-300}"
+      - "PHP_UPLOAD_MAX_FILESIZE=${PHP_UPLOAD_MAX_FILESIZE:-50M}"
+      - "PHP_POST_MAX_SIZE=${PHP_POST_MAX_SIZE:-50M}"
+      - "PHP_MAX_INPUT_TIME:${PHP_MAX_INPUT_TIME:-300}"
   
   misp-modules:
-    image: ghcr.io/misp/misp-docker/misp-modules:latest
+    image: ghcr.io/misp/misp-docker/misp-modules:${MODULES_TAG}
     build:
       context: modules/.
       args:
-        - MODULES_TAG=${MODULES_TAG}
+        - MODULES_TAG=${MODULES_TAG:?Missing .env file, see README.md for instructions}
         - MODULES_COMMIT=${MODULES_COMMIT}
-        - LIBFAUP_COMMIT=${LIBFAUP_COMMIT}
+        - LIBFAUP_COMMIT=${LIBFAUP_COMMIT:?Missing .env file, see README.md for instructions}
     environment:
-      - "REDIS_BACKEND=redis"
+      - "REDIS_BACKEND=${REDIS_HOST:-redis}"
+      - "REDIS_PORT=${REDIS_PORT:-6379}"
+      - "REDIS_PW=${REDIS_PASSWORD:-redispassword}"
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
 
 volumes:
     mysql_data:

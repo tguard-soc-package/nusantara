@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-#
 #  IRIS Source Code
 #  DFIR-IRIS Team
 #  contact@dfir-iris.org
@@ -22,10 +20,7 @@ from sqlalchemy import and_
 
 from app.datamgmt.case.case_tasks_db import get_tasks_cases_mapping
 from app.datamgmt.manage.manage_cases_db import user_list_cases_view
-from app.models import Cases, CaseClassification
-from app.models import Client
-from app.models.authorization import User
-from app.models.cases import CaseState
+from app.models import Cases
 from app.schema.marshables import CaseDetailsSchema
 
 
@@ -41,7 +36,8 @@ def get_overview_db(user_id, show_full):
     open_cases = Cases.query.filter(
        condition
     ).join(
-        Cases.owner,
+        Cases.owner
+    ).join(
         Cases.client
     ).all()
 

@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-#
 #  IRIS Source Code
 #  Copyright (C) 2023 - DFIR-IRIS
 #  contact@dfir-iris.org
@@ -22,18 +20,21 @@ from flask_login import current_user
 from werkzeug import Response
 
 from app import db
-from app.datamgmt.filters.filters_db import get_filter_by_id, list_filters_by_type
+from app.datamgmt.filters.filters_db import get_filter_by_id
+from app.datamgmt.filters.filters_db import list_filters_by_type
 from app.iris_engine.utils.tracker import track_activity
 from app.schema.marshables import SavedFilterSchema
-from app.util import ac_api_requires, response_success, response_error
+from app.util import ac_api_requires
+from app.util import response_success
+from app.util import response_error
 
 saved_filters_blueprint = Blueprint('saved_filters', __name__,
                                     template_folder='templates')
 
 
 @saved_filters_blueprint.route('/filters/add', methods=['POST'])
-@ac_api_requires(no_cid_required=True)
-def filters_add_route(caseid) -> Response:
+@ac_api_requires()
+def filters_add_route() -> Response:
     """
     Add a new saved filter
 
@@ -65,8 +66,8 @@ def filters_add_route(caseid) -> Response:
 
 
 @saved_filters_blueprint.route('/filters/update/<int:filter_id>', methods=['POST'])
-@ac_api_requires(no_cid_required=True)
-def filters_update_route(filter_id, caseid) -> Response:
+@ac_api_requires()
+def filters_update_route(filter_id) -> Response:
     """
     Update a saved filter
 
@@ -98,8 +99,8 @@ def filters_update_route(filter_id, caseid) -> Response:
 
 
 @saved_filters_blueprint.route('/filters/delete/<int:filter_id>', methods=['POST'])
-@ac_api_requires(no_cid_required=True)
-def filters_delete_route(filter_id, caseid) -> Response:
+@ac_api_requires()
+def filters_delete_route(filter_id) -> Response:
     """
     Delete a saved filter
 
@@ -127,8 +128,8 @@ def filters_delete_route(filter_id, caseid) -> Response:
 
 
 @saved_filters_blueprint.route('/filters/<int:filter_id>', methods=['GET'])
-@ac_api_requires(no_cid_required=True)
-def filters_get_route(filter_id, caseid) -> Response:
+@ac_api_requires()
+def filters_get_route(filter_id) -> Response:
     """
     Get a saved filter
 
@@ -153,8 +154,8 @@ def filters_get_route(filter_id, caseid) -> Response:
 
 
 @saved_filters_blueprint.route('/filters/<string:filter_type>/list', methods=['GET'])
-@ac_api_requires(no_cid_required=True)
-def filters_list_route(filter_type, caseid) -> Response:
+@ac_api_requires()
+def filters_list_route(filter_type) -> Response:
     """
     List saved filters
 

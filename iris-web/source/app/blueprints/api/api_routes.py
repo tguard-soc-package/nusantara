@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-#
 #  IRIS Source Code
 #  Copyright (C) 2021 - Airbus CyberSecurity (SAS)
 #  ir@cyberactionlab.net
@@ -34,13 +32,13 @@ api_blueprint = Blueprint(
 # CONTENT ------------------------------------------------
 @api_blueprint.route('/api/ping', methods=['GET'])
 @ac_api_requires()
-def api_ping(caseid):
+def api_ping():
     return response_success("pong")
 
 
 @api_blueprint.route('/api/versions', methods=['GET'])
 @ac_api_requires()
-def api_version(caseid):
+def api_version():
     versions = {
         "iris_current": app.config.get('IRIS_VERSION'),
         "api_min": app.config.get('API_MIN_VERSION'),

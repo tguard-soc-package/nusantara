@@ -36,8 +36,7 @@ RUN pip3 install -r requirements.txt
 # BUILD IMAGE #
 ###############
 FROM python:3.9 as iriswebapp
-
-ENV PYTHONUNBUFFERED=1
+ENV PYTHONUNBUFFERED=1 DOCKERIZED=1
 
 COPY --from=compile-image /opt/venv /opt/venv
 
@@ -51,7 +50,7 @@ RUN apt update
 RUN apt install -y p7zip-full pgp rsync postgresql-client
 
 RUN mkdir /iriswebapp/
-RUN mkdir -p /home/iris/certificates
+RUN mkdir -p /home/iris/certificates/{rootCA,web_certificates}
 RUN mkdir -p /home/iris/user_templates
 RUN mkdir -p /home/iris/server_data
 RUN mkdir -p /home/iris/server_data/backup

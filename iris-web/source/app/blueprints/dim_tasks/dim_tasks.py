@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-#
-#
 #  IRIS Source Code
 #  Copyright (C) 2021 - Airbus CyberSecurity (SAS)
 #  ir@cyberactionlab.net
@@ -19,7 +16,6 @@
 #  along with this program; if not, write to the Free Software Foundation,
 #  Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-# IMPORTS ------------------------------------------------
 import json
 import os
 import pickle
@@ -79,18 +75,18 @@ def dim_index(caseid: int, url_redir):
 
 @dim_tasks_blueprint.route('/dim/hooks/options/<hook_type>/list', methods=['GET'])
 @ac_api_requires()
-def list_dim_hook_options_ioc(hook_type, caseid):
-    mods_options = IrisModuleHook.query.with_entities(
+def list_dim_hook_options_ioc(hook_type):
+    mods_options = (IrisModuleHook.query.with_entities(
         IrisModuleHook.manual_hook_ui_name,
         IrisHook.hook_name,
         IrisModule.module_name
     ).filter(
         IrisHook.hook_name == f"on_manual_trigger_{hook_type}",
         IrisModule.is_active == True
-    ).join(
-        IrisModuleHook.module,
-        IrisModuleHook.hook
-    ).all()
+    )
+    .join(IrisHook, IrisHook.id == IrisModuleHook.hook_id)
+    .join(IrisModule, IrisModule.id == IrisModuleHook.module_id)
+    .all())
 
     data = [options._asdict() for options in mods_options]
 
@@ -205,7 +201,7 @@ def dim_hooks_call(caseid):
 
 @dim_tasks_blueprint.route('/dim/tasks/list/<int:count>', methods=['GET'])
 @ac_api_requires()
-def list_dim_tasks(count, caseid):
+def list_dim_tasks(count):
     tasks = CeleryTaskMeta.query.filter(
         ~ CeleryTaskMeta.name.like('app.iris_engine.updater.updater.%')
     ).order_by(desc(CeleryTaskMeta.date_done)).limit(count).all()

@@ -5,11 +5,3 @@ hosts:
       username: wazuh-wui
       password: "MyS3cr37P450r.*-"
       run_as: false
-
-customization.enabled: true
-customization.logo.app: '/usr/share/wazuh-dashboard/plugins/wazuh/public/assets/custom/test.jpg'
-#customization.logo.sidebar: 'custom/images/customization.logo.sidebar.png'
-#customization.logo.healthcheck: 'custom/images/customization.logo.healthcheck.svg'
-#customization.logo.reports: 'custom/images/customization.logo.reports.jpg'
-customization.reports.footer: 'T-Guard'
-customization.reports.header: 'T-Guard'

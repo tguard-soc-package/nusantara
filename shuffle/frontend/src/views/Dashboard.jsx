@@ -1,16 +1,11 @@
-import React, { useState, useEffect } from "react";
-import { useInterval } from "react-powerhooks";
-import AppFramework from "../components/AppFramework.jsx";
-import { makeStyles, } from "@mui/styles";
-// nodejs library that concatenates classes
-import classNames from "classnames";
-import theme from '../theme.jsx';
-import { useNavigate, Link, useParams } from "react-router-dom";
-import WorkflowTemplatePopup from "../components/WorkflowTemplatePopup.jsx";
-
-// react plugin used to create charts
-//import { Line, Bar } from "react-chartjs-2";
-//import { useAlert
+import React, { useState, useEffect } from "react"
+import { useInterval } from "react-powerhooks"
+import AppFramework from "../components/AppFramework.jsx"
+import { makeStyles, } from "@mui/styles"
+import classNames from "classnames"
+import theme from '../theme.jsx'
+import { useNavigate, Link, useParams } from "react-router-dom"
+import WorkflowTemplatePopup from "../components/WorkflowTemplatePopup.jsx"
 import { ToastContainer, toast } from "react-toastify" 
 import { parsedDatatypeImages } from "../components/AppFramework.jsx"
 import { findSpecificApp } from "../components/AppFramework.jsx"
@@ -95,10 +90,15 @@ const useStyles = makeStyles({
 
 
 
-const UsecaseListComponent = ({userdata, keys, isCloud, globalUrl, frameworkData, isLoggedIn, workflows, setWorkflows}) => {
+const UsecaseListComponent = (props) => {
+	const { keys, userdata, isCloud, globalUrl, frameworkData, isLoggedIn, workflows, setWorkflows, getFramework, setFrameworkData, } = props
+
+
 	const [expandedIndex, setExpandedIndex] = useState(-1);
 	const [expandedItem, setExpandedItem] = useState(-1);
 	const [inputUsecase, setInputUsecase] = useState({});
+
+	const [prevSubcase, setPrevSubcase] = useState({})
 
 	const [editing, setEditing] = useState(false);
 	const [description, setDescription] = useState("");
@@ -110,10 +110,46 @@ const UsecaseListComponent = ({userdata, keys, isCloud, globalUrl, frameworkData
 	const [firstLoad, setFirstLoad] = useState(true)
 	const [apps, setApps] = useState([])
 
+
     const classes = useStyles();
 	let navigate = useNavigate();
 
 	const [mitreTags, setMitreTags] = useState([]);
+
+
+	const parseUsecase = (subcase) => {
+	  const srcdata = findSpecificApp(frameworkData, subcase.type)
+	  const dstdata = findSpecificApp(frameworkData, subcase.last)
+	
+	  if (srcdata !== undefined && srcdata !== null) { 
+		subcase.srcimg = srcdata.large_image 
+		subcase.srcapp = srcdata.name
+	  }
+
+	  if (dstdata !== undefined && dstdata !== null) {
+		  subcase.dstimg = dstdata.large_image
+		  subcase.dstapp = dstdata.name
+	  }
+
+	  return subcase 
+  }
+
+	useEffect(() => {
+		//console.log("Frameworkdata changed. Use to set inputUsecase: ", frameworkData, prevSubcase)
+		if (frameworkData === undefined || prevSubcase === undefined) {
+			return
+		}
+
+		var parsedUsecase = inputUsecase
+		const subcase = parseUsecase(prevSubcase)
+
+		parsedUsecase.srcimg = subcase.srcimg
+		parsedUsecase.srcapp = subcase.srcapp
+		parsedUsecase.dstimg = subcase.dstimg
+		parsedUsecase.dstapp = subcase.dstapp
+
+		setInputUsecase(parsedUsecase)
+	}, [frameworkData])
 
 	const loadApps = () => {
 		fetch(`${globalUrl}/api/v1/apps`, {
@@ -161,37 +197,14 @@ const UsecaseListComponent = ({userdata, keys, isCloud, globalUrl, frameworkData
 
 	if (keys === undefined || keys === null || keys.length === 0) {
 		return null
-	}
+	}	
 
+  
 
-  const parseUsecase = (subcase) => {
-	  console.log("parseUsecase: ", subcase)
-	  const srcdata = findSpecificApp(frameworkData, subcase.type)
-	  const dstdata = findSpecificApp(frameworkData, subcase.last)
-
-	  console.log("srcdata: ", srcdata)
-	  console.log("dstdata: ", dstdata)
-	
-	  if (srcdata !== undefined && srcdata !== null) { 
-		subcase.srcimg = srcdata.large_image 
-		subcase.srcapp = srcdata.name
-	  }
-
-	  if (dstdata !== undefined && dstdata !== null) {
-		  subcase.dstimg = dstdata.large_image
-		  subcase.dstapp = dstdata.name
-	  }
-
-	  return subcase 
-  }
-
+  // Timeout 50ms to delay it slightly 
   const getUsecase = (subcase, index, subindex) => {
 	subcase = parseUsecase(subcase)
-
-	// Timeout 50ms to delay it slightly 
-	setTimeout(() => {
-		setInputUsecase(subcase)
-	}, 50)
+	setPrevSubcase(subcase)
 
     fetch(`${globalUrl}/api/v1/workflows/usecases/${escape(subcase.name.replaceAll(" ", "_"))}`, {
       method: "GET",
@@ -209,7 +222,6 @@ const UsecaseListComponent = ({userdata, keys, isCloud, globalUrl, frameworkData
 		return response.json();
 	})
 	.then((responseJson) => {
-		console.log("In responseJson for usecase: ", responseJson)
 		var parsedUsecase = responseJson
 
 		if (responseJson.success === false) {
@@ -229,19 +241,21 @@ const UsecaseListComponent = ({userdata, keys, isCloud, globalUrl, frameworkData
 		setExpandedItem(subindex)
 
 		setTimeout(() => {
-			//console.log("Scroll!")
 			const found = document.getElementById("selected_box");
 			if (found !== undefined && found !== null) {
 				//console.log("FOUND!!")
-				found.scrollTo({
-					top: 100,
-					behavior: "smooth",
-				})
+
+				//found.scrollTo({
+				//	top: 100,
+				//	behavior: "smooth",
+				//})
+			} else {
+				//console.log("NOT FOUND!!")
 			}
 
 			setFirstLoad(true)
 			setSelectedWorkflows([])
-		}, 100);
+		}, 100)
 	})
 	.catch((error) => {
 		//toast(error.toString());
@@ -311,7 +325,7 @@ const UsecaseListComponent = ({userdata, keys, isCloud, globalUrl, frameworkData
 			})
       .catch((error) => {
         //toast(error.toString());
-				//setFrameworkLoaded(true)
+		//setFrameworkLoaded(true)
       })
 	}
 
@@ -412,16 +426,17 @@ const UsecaseListComponent = ({userdata, keys, isCloud, globalUrl, frameworkData
 								const fixedName = subcase.name.toLowerCase().replace("_", " ")
 
 								return (
-      						<Grid id={fixedName} item xs={selectedItem ? 12 : 4} key={subindex} style={{minHeight: 110,}} onClick={() => {
+      								<Grid id={fixedName} item xs={selectedItem ? 12 : 4} key={subindex} style={{minHeight: 110,}} onClick={() => {
+										if (fixedName === "increase authentication") {
+											getUsecase(subcase, index, subindex) 
+											return
+										}
 
 										//setSelectedWorkflows([])
 										if (selectedItem) {
 										} else {
 											getUsecase(subcase, index, subindex) 
 											navigate(`/usecases?selected_object=${fixedName}`)
-
-											//const newitem = removeParam("selected_object", cursearch);
-											//navigate(curpath + newitem)
 										}
 									}}>
 										<Paper style={{padding: 25, minHeight: isCloud ? 75 : 122, cursor: !selectedItem ? "pointer" : "default", border: itemBorder, backgroundColor: backgroundColor,}} onClick={() => {
@@ -591,11 +606,12 @@ const UsecaseListComponent = ({userdata, keys, isCloud, globalUrl, frameworkData
           									>
           									  <IconButton
           									    style={{}}
+												index="close_selection"
           									    onClick={(e) => {
-																	setExpandedItem(-1)
-																	setExpandedIndex(-1)
-																	setEditing(false)
-																	setInputUsecase({})
+													setExpandedItem(-1)
+													setExpandedIndex(-1)
+													setEditing(false)
+													setInputUsecase({})
           									    }}
           									  >
           									    <CloseIcon style={{ color: "white" }} />
@@ -784,7 +800,6 @@ const UsecaseListComponent = ({userdata, keys, isCloud, globalUrl, frameworkData
           													    borderRadius: theme.palette.borderRadius,
           													  }}
           													  onChange={(event, newValue) => {
-																console.log("CLICK: ", newValue)
 																//handleWorkflowSelectionUpdate({ target: { value: newValue} })
 																//setSelectedWorkflows=
 																//var newvalue = []
@@ -801,7 +816,6 @@ const UsecaseListComponent = ({userdata, keys, isCloud, globalUrl, frameworkData
 																		if (workflows[key]["usecase_ids"] !== undefined && workflows[key]["usecase_ids"] !== null && workflows[key]["usecase_ids"].includes(subcase.name)) {
 																			const filtered = workflows[key]["usecase_ids"].filter(data => data !== subcase.name)
 																			if (filtered !== undefined && filtered !== null) {
-																				//console.log("Removing: ", workflows[key].name, workflows[key])
 																				workflows[key]["usecase_ids"] = filtered
 																	
 																				setWorkflow(workflows[key]) 
@@ -813,19 +827,16 @@ const UsecaseListComponent = ({userdata, keys, isCloud, globalUrl, frameworkData
 
 																	if (workflows[key]["usecase_ids"] === undefined || workflows[key]["usecase_ids"] === null) {
 																		workflows[key]["usecase_ids"] = [subcase.name]
-																		console.log("Setting: ", workflows[key].name)
 																		setWorkflow(workflows[key]) 
 
 																	} else if (!workflows[key]["usecase_ids"].includes(subcase.name)) {
 																		workflows[key]["usecase_ids"].push(subcase.name)
-																		console.log("Adding: ", workflows[key].name)
 																		setWorkflow(workflows[key]) 
 
 																	}
 																}
 
 																setWorkflows(workflows)
-																console.log("New: ", newValue)
 																setSelectedWorkflows(newValue)
                 												//setUpdate(Math.random())
           													  }}
@@ -887,19 +898,24 @@ const UsecaseListComponent = ({userdata, keys, isCloud, globalUrl, frameworkData
 																>
 																	Try it out:
 																</Typography>
-																<WorkflowTemplatePopup 
-																	userdata={userdata}
-
-																	globalUrl={globalUrl}
-																	img1={inputUsecase.srcimg}
-																	srcapp={inputUsecase.srcapp}
-																	img2={inputUsecase.dstimg}
-																	dstapp={inputUsecase.dstapp}
-																	title={inputUsecase.name}
-																	description={inputUsecase.description}
-
-																	apps={apps}
-																/>
+																{frameworkData !== undefined && frameworkData !== null && Object.keys(frameworkData).length > 0 ?
+																	<WorkflowTemplatePopup 
+																		isLoggedIn={isLoggedIn}
+																		appFramework={frameworkData}
+																		userdata={userdata}
+																		globalUrl={globalUrl}
+																		img1={inputUsecase.srcimg}
+																		srcapp={inputUsecase.srcapp}
+																		img2={inputUsecase.dstimg}
+																		dstapp={inputUsecase.dstapp}
+																		title={inputUsecase.name}
+																		description={inputUsecase.description}
+																		apps={apps}
+																		getAppFramework={getFramework}
+																		//appSetupDone={appSetupDone}
+																		//setAppSetupDone={setAppSetupDone}
+																	/>
+																: null}
 															</span>
 															{/*
 
@@ -971,13 +987,15 @@ const UsecaseListComponent = ({userdata, keys, isCloud, globalUrl, frameworkData
 																}}>
 																<AppFramework
 																	inputUsecase={inputUsecase}
-																	frameworkData={frameworkData}
 																	selectedOption={"Draw"}
 																	showOptions={false}
 																	isLoaded={true}
 																	isLoggedIn={true}
 																	globalUrl={globalUrl}
 																	size={0.6}
+
+																	frameworkData={frameworkData}
+																	setFrameworkData={setFrameworkData}
 																/>
 															</div>
 														</div>
@@ -1125,7 +1143,7 @@ const RadialChart = ({keys, setSelectedCategory}) => {
 // This is the start of a dashboard that can be used.
 // What data do we fill in here? Idk
 const Dashboard = (props) => {
-  const { globalUrl, isLoggedIn } = props;
+  const { globalUrl, isLoggedIn, userdata } = props;
   //const alert = useAlert();
   const [bigChartData, setBgChartData] = useState("data1");
   const [dayAmount, setDayAmount] = useState(7);
@@ -1170,13 +1188,28 @@ const Dashboard = (props) => {
 		if (foundQuery !== null && foundQuery !== undefined) {
 			setSelectedUsecaseCategory(foundQuery)
 
-      const newitem = removeParam("selected", cursearch);
+      	const newitem = removeParam("selected", cursearch);
 			navigate(curpath + newitem)
+		}
+
+		const baseItem = document.getElementById("increase authentication")
+		if (baseItem !== undefined && baseItem !== null) {
+			baseItem.click()
+
+			// Find close window button -> go to top
+			const foundButton = document.getElementById("close_selection")
+			if (foundButton !== undefined && foundButton !== null) {
+				foundButton.click()
+			}
+
+			// Scroll back to top
+			window.scrollTo(0, 0)
 		}
 
 		const foundQuery2 = params["selected_object"]
 		if (foundQuery2 !== null && foundQuery2 !== undefined) {
-			console.log("Got selected_object: ", foundQuery2)
+			// Take a random object, quickly click it, then go to this one
+			// Something is weird with loading apps without it
 
 			const queryName = foundQuery2.toLowerCase().replaceAll("_", " ")
 			// Waiting a bit for it to render
@@ -1184,22 +1217,31 @@ const Dashboard = (props) => {
 				const foundItem = document.getElementById(queryName)
 				if (foundItem !== undefined && foundItem !== null) { 
 					foundItem.click()
+					// Scroll to it
+
+					setTimeout(() => {
+						foundItem.scrollIntoView({
+							behavior: "smooth", 
+							block: "center", 
+							inline: "center"
+						})
+					}, 100)
 				} else { 
 					//console.log("Couldn't find item with name ", queryName)
 				}
-			}, 100);
+			}, 1000);
 		}
 
 	}
 
 	useEffect(() => {
 		if (usecases.length > 0) {
-			console.log(usecases)
+			//console.log(usecases)
 			checkSelectedParams()
 		}
 	}, [usecases])
 
-	const getFramework = () => {
+  const getFramework = () => {
     fetch(globalUrl + "/api/v1/apps/frameworkConfiguration", {
       method: "GET",
       headers: {
@@ -1216,20 +1258,30 @@ const Dashboard = (props) => {
         return response.json();
       })
       .then((responseJson) => {
-				if (responseJson.success === false) {
-					if (responseJson.reason !== undefined) {
-						//toast("Failed loading: " + responseJson.reason)
-					} else {
-						//toast("Failed to load framework for your org.")
-					}
-				} else {
-					setFrameworkData(responseJson)
+			if (responseJson.success === false) {
+				const preparedData = {
+					"siem": findSpecificApp({}, "SIEM"), 
+					"communication": findSpecificApp({}, "COMMUNICATION"),
+					"assets": findSpecificApp({}, "ASSETS"),
+					"cases": findSpecificApp({}, "CASES"),
+					"network": findSpecificApp({}, "NETWORK"),
+					"intel": findSpecificApp({}, "INTEL"),
+					"edr": findSpecificApp({}, "EDR"),
+					"iam": findSpecificApp({}, "IAM"),
+					"email": findSpecificApp({}, "EMAIL"),
 				}
-			})
+
+				console.log("Got error for framework! ", preparedData) 
+				setFrameworkData(preparedData)
+			} else {
+				setFrameworkData(responseJson)
+			}
+	  })
       .catch((error) => {
         toast(error.toString());
       })
-		}
+	}
+
 
   const getAvailableWorkflows = () => {
     fetch(globalUrl + "/api/v1/workflows", {
@@ -1365,8 +1417,7 @@ const Dashboard = (props) => {
 
   useEffect(() => {
   	getAvailableWorkflows() 
-		getFramework() 
-		//fetchUsecases()
+	getFramework() 
   }, []);
 
   const fetchdata = (stats_id) => {
@@ -1659,13 +1710,17 @@ const Dashboard = (props) => {
 			: null}
 
 			<UsecaseListComponent 
+	  			userdata={userdata}
 				isLoggedIn={isLoggedIn}
-				frameworkData={frameworkData}
 				keys={selectedUsecases} 
 				isCloud={isCloud} 
 				globalUrl={globalUrl} 
 				workflows={workflows}
 				setWorkflows={setWorkflows}
+
+				frameworkData={frameworkData}
+	  			setFrameworkData={setFrameworkData}
+	  			getFramework={getFramework}
 			/>
 
 			{treeKeys.length > 0 ? 

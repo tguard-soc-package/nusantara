@@ -22,36 +22,46 @@ import {
 //import { useAlert 
 
 const Priority = (props) => {
-  	const { globalUrl, userdata, serverside, priority, checkLogin, setAdminTab, setCurTab, appFramework, } = props;
+  	const { globalUrl, clickedFromOrgTab,userdata, serverside, priority, checkLogin, setAdminTab, setCurTab, appFramework, } = props;
 
   	const isCloud = window.location.host === "localhost:3002" || window.location.host === "shuffler.io";
 	let navigate = useNavigate();
 
-	var realigned = false
+	var realignedSrc = false
+	var realignedDst = false
 	let newdescription = priority.description
 	const descsplit = priority.description.split("&")
 	if (appFramework !== undefined && descsplit.length === 5 && priority.description.includes(":default")) {
-		console.log("descsplit: ", descsplit)
 		if (descsplit[1] === "") {
 			const item = findSpecificApp(appFramework, descsplit[0])
-			console.log("item: ", item)
+
 			if (item !== null) {
 				descsplit[1] = item.large_image
+
+				console.log("DESCSPLIT name: ", descsplit[0])
+
+				if (descsplit[0].includes(":default")) {
+					realignedSrc = true 
+				}
+
 				descsplit[0] = descsplit[0].split(":")[0]
 			}
-
-			realigned = true 
 		}
 
 		if (descsplit[3] === "") {
 			const item = findSpecificApp(appFramework, descsplit[2])
-			console.log("item: ", item)
+			//console.log("item: ", item)
+			realignedDst = true 
 			if (item !== null) {
 				descsplit[3] = item.large_image
+
+				if (descsplit[2].includes(":default")) {
+					realignedDst = true 
+				}
+
 				descsplit[2] = descsplit[2].split(":")[0]
 			}
-		
-			realigned = true 
+
 		}
 
 		newdescription = descsplit.join("&")
@@ -101,8 +111,10 @@ const Priority = (props) => {
 	}
 
 
+	const srcSize = realignedSrc ? 35 : 30 
+	const dstSize = realignedDst ? 35 : 30
 	return (
-		<div style={{border: priority.active === false ? "1px solid #000000" :  priority.severity === 1 ? "1px solid #f85a3e" : "1px solid rgba(255,255,255,0.3)", borderRadius: theme.palette.borderRadius, marginTop: 10, marginBottom: 10, padding: 15, textAlign: "center", minHeight: isCloud ? 70 : 100, maxHeight: isCloud ? 70 : 100, textAlign: "left", backgroundColor: theme.palette.surfaceColor, display: "flex", }}>
+		<div style={{border: priority.active === false ? "1px solid #000000" :  priority.severity === 1 ? "1px solid #f85a3e" :  clickedFromOrgTab ?null:"1px solid rgba(255,255,255,0.3)", borderRadius: theme.palette.borderRadius, marginTop: 10, marginBottom: 10, padding:  clickedFromOrgTab ? 24:15, textAlign: "center", minHeight: isCloud ? 70 : 100, maxHeight: isCloud ? 70 : 100, textAlign: "left", backgroundColor: clickedFromOrgTab ?  "#1A1A1A": theme.palette.surfaceColor, display: "flex", }}>
 			<div style={{flex: 2, overflow: "hidden",}}>
 				<span style={{display: "flex", }}>
 					{priority.type === "usecase" || priority.type == "apps" ? <AutoFixHighIcon style={{height: 19, width: 19, marginLeft: 3, marginRight: 10, }}/> : null} 
@@ -112,7 +124,7 @@ const Priority = (props) => {
 				</span>
 				{priority.type === "usecase" && priority.description.includes("&") ?
 					<span style={{display: "flex", marginTop: 10,  }}>
-						<img src={newdescription.split("&")[1]} alt={priority.name} style={{height: "auto", width: 30, marginRight: realigned ? -10 : 10,	borderRadius: theme.palette.borderRadius, marginTop: realigned ? 5 : 0 }} />
+						<img src={newdescription.split("&")[1]} alt={priority.name} style={{height: srcSize, width: srcSize, marginRight: realignedSrc ? isCloud ? 0 : -10 : 10, borderRadius: theme.palette.borderRadius-3, marginTop: realignedSrc ?  5 : 0 }} />
 						<Typography variant="body2" color="textSecondary" style={{marginTop: 3, }}>
 							{newdescription.split("&")[0]} 
 						</Typography>
@@ -120,7 +132,7 @@ const Priority = (props) => {
 						{newdescription.split("&").length > 3 ?
 							<span style={{display: "flex", }}>
 								<ArrowForwardIcon style={{marginLeft: 15, marginRight: 15, }}/>
-								<img src={newdescription.split("&")[3]} alt={priority.name+"2"} style={{height: "auto", width: 30, marginRight: realigned ? -10 : 10,	borderRadius: theme.palette.borderRadius, marginTop: realigned ? 5 : 0 }} />
+								<img src={newdescription.split("&")[3]} alt={priority.name+"2"} style={{height: dstSize, width: dstSize, marginRight: realignedDst ? -5 : 10,	borderRadius: theme.palette.borderRadius-3, marginTop: realignedDst ? 5 : 0 }} />
 								<Typography variant="body2" color="textSecondary" style={{marginTop: 3}}>
 									{newdescription.split("&")[2]} 
 								</Typography>
@@ -135,7 +147,7 @@ const Priority = (props) => {
 				}
 			</div>
 			<div style={{flex: 1, display: "flex", marginLeft: 30, }}>
-				<Button style={{height: 50, borderRadius: 25,  marginTop: 8, width: 175, marginRight: 10, color: priority.active === false ? "white" : "black", backgroundColor: priority.active === false ? theme.palette.inputColor : "rgba(255,255,255,0.8)", }} variant="contained" color="secondary" onClick={() => {
+				<Button style={{height: 50, borderRadius: 25, fontSize:16, boxShadow: clickedFromOrgTab ? "none":null,textTransform: clickedFromOrgTab ? 'capitalize':null, marginTop: 8, width: 175, marginRight: 10, color: priority.active === false ? "white" :clickedFromOrgTab ?"#FF8444": "black", backgroundColor: priority.active === false ? theme.palette.inputColor :clickedFromOrgTab?"rgba(255, 132, 68, 0.2)":"rgba(255,255,255,0.8)", }} variant="contained" color="secondary" onClick={() => {
 
 					if (isCloud) {
 						ReactGA.event({
@@ -161,7 +173,7 @@ const Priority = (props) => {
 					Explore		
 				</Button>
 				{priority.active === true ?
-					<Button style={{borderRadius: 25, width: 100, height: 50, marginTop: 8, }} variant="text" color="secondary" onClick={() => {
+					<Button style={{borderRadius: 25, fontSize:16, boxShadow: clickedFromOrgTab ? "none":null,textTransform: clickedFromOrgTab ? 'capitalize':null, width: 100, height: 50, marginTop: 8, }} variant="text" color="secondary" onClick={() => {
 						// dismiss -> get envs
 						changeRecommendation(priority, "dismiss")
 					}}>

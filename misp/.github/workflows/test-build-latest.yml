@@ -1,0 +1,39 @@
+name: Build the Docker images
+
+on:
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        target: [misp-core, misp-modules]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Initialize environment
+        env:
+          GITHUB_CONTEXT: ${{ toJson(github) }}
+        run: |
+          sed -e '/^[[:space:]]*$/d' -e '/[#@]/d' -e 's/\"//g' -e 's/\(^[^=]*\)=\(.*\)/\1="\2"/' template.env > env.hcl
+          echo "COMMIT_HASH=`echo '${{ github.sha }}' | cut -c 1-7`" >> "$GITHUB_ENV"
+          echo "NAMESPACE=local" >> "$GITHUB_ENV"
+
+      - name: Build
+        uses: docker/bake-action@v4
+        with:
+          push: false
+          provenance: false
+          files: docker-bake.hcl, env.hcl
+          targets: ${{ matrix.target }}

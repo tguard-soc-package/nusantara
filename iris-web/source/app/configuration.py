@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-#
 #  IRIS Source Code
 #  Copyright (C) 2021 - Airbus CyberSecurity (SAS)
 #  ir@cyberactionlab.net
@@ -265,10 +263,13 @@ class CeleryConfig:
 # --------- APP ---------
 class Config:
     # Handled by bumpversion
-    IRIS_VERSION = "v2.3.3"
+    IRIS_VERSION = "v2.4.12" # DO NOT EDIT THIS LINE MANUALLY
 
-    API_MIN_VERSION = "2.0.0"
-    API_MAX_VERSION = "2.0.3"
+    if os.environ.get('IRIS_DEMO_VERSION') is not None and os.environ.get('IRIS_DEMO_VERSION') != 'None':
+        IRIS_VERSION = os.environ.get('IRIS_DEMO_VERSION')
+
+    API_MIN_VERSION = "2.0.4"
+    API_MAX_VERSION = "2.0.5"
 
     MODULES_INTERFACE_MIN_VERSION = '1.1'
     MODULES_INTERFACE_MAX_VERSION = '1.2.0'
@@ -287,9 +288,10 @@ class Config:
         IRIS_ADM_USERNAME = config.load('IRIS', 'ADM_USERNAME')
         IRIS_ADM_API_KEY = config.load('IRIS', 'ADM_API_KEY')
 
-    PERMANENT_SESSION_LIFETIME = timedelta(hours=24)
+    PERMANENT_SESSION_LIFETIME = timedelta(minutes=config.load('IRIS', 'SESSION_TIMEOUT', fallback=1440))
     SESSION_COOKIE_SAMESITE = 'Lax'
     SESSION_COOKIE_SECURE = True
+    MFA_ENABLED = config.load('IRIS', 'MFA_ENABLED', fallback=False) == 'True'
 
     PG_ACCOUNT = PG_ACCOUNT_
     PG_PASSWD = PG_PASSWD_

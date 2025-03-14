@@ -22,6 +22,7 @@ import { isMobile } from "react-device-detect"
 import { NestedMenuItem } from "mui-nested-menu"
 import { GetParsedPaths, FindJsonPath } from "../views/Apps.jsx";
 import { SetJsonDotnotation } from "../views/AngularWorkflow.jsx";
+import { vscodeDark, vscodeDarkInit } from '@uiw/codemirror-theme-vscode';
 
 import {
 	FullscreenExit as FullscreenExitIcon,
@@ -46,6 +47,7 @@ import ReactJson from "react-json-view";
 import PaperComponent from "../components/PaperComponent.jsx";
 
 import CodeMirror from '@uiw/react-codemirror';
+import { python } from '@codemirror/lang-python';
 //import 'codemirror/keymap/sublime';
 //import 'codemirror/addon/selection/mark-selection.js'
 //import 'codemirror/theme/gruvbox-dark.css';
@@ -55,15 +57,15 @@ import { padding, textAlign } from '@mui/system';
 import data from '../frameworkStyle.jsx';
 import { useNavigate, Link, useParams } from "react-router-dom";
 import { tags as t } from '@lezer/highlight';
-import { createTheme } from '@uiw/codemirror-themes';
 
 
 
 const liquidFilters = [
-	{"name": "Size", "value": "size", "example": ""},
-	{"name": "Date", "value": `date: "%Y%m%d"`, "example": `{{ "now" | date: "%s" }}`},
+	{"name": "Default", "value": `default: []`, "example": `{{ "" | default: "no input" }}`},
 	{"name": "Split", "value": `split: ","`, "example": `{{ "this,can,become,a,list" | split: "," }}`},
 	{"name": "Join", "value": `join: ","`, "example": `{{ ["this","can","become","a","string"] | join: "," }}`},
+	{"name": "Size", "value": "size", "example": ""},
+	{"name": "Date", "value": `date: "%Y%m%d"`, "example": `{{ "now" | date: "%s" }}`},
 	{"name": "Escape String", "value": `{{ \"\"\"'string with weird'" quotes\"\"\" | escape_string }}`, "example": ``},
 	{"name": "Flatten", "value": `flatten`, "example": `{{ [1, [1, 2], [2, 3, 4]] | flatten }}`},
 	{"name": "URL encode", "value": `url_encode`, "example": `{{ "https://www.google.com/search?q=hello world" | url_encode }}`},
@@ -81,35 +83,6 @@ const pythonFilters = [
 	{"name": "Hello World", "value": `{% python %}\nprint("hello world")\n{% endpython %}`, "example": ``},
 	{"name": "Handle JSON", "value": `{% python %}\nimport json\njsondata = json.loads(r"""$nodename""")\n{% endpython %}`, "example": ``},
 ]
-
-const shuffleTheme = createTheme({
-  theme: 'dark',
-  settings: {
-    background: "rgba(40,40,40, 1)",
-    foreground: '#75baff',
-    caret: '#5d00ff',
-    selection: '#036dd626',
-    selectionMatch: '#036dd626',
-    lineHighlight: '#8a91991a',
-    gutterForeground: '#8a919966',
-  },
-  styles: [
-    { tag: t.comment, color: '#787b8099' },
-    { tag: t.variableName, color: '#0080ff' },
-    { tag: [t.string, t.special(t.brace)], color: '#5c6166' },
-    { tag: t.number, color: '#5c6166' },
-    { tag: t.bool, color: '#5c6166' },
-    { tag: t.null, color: '#5c6166' },
-    { tag: t.keyword, color: '#5c6166' },
-    { tag: t.operator, color: '#5c6166' },
-    { tag: t.className, color: '#5c6166' },
-    { tag: t.definition(t.typeName), color: '#5c6166' },
-    { tag: t.typeName, color: '#5c6166' },
-    { tag: t.angleBracket, color: '#5c6166' },
-    { tag: t.tagName, color: '#5c6166' },
-    { tag: t.attributeName, color: '#5c6166' },
-  ],
-});
 
 const CodeEditor = (props) => {
 	const { 
@@ -208,6 +181,78 @@ const CodeEditor = (props) => {
 		console.log("Checking local codedata: ", localcodedata)
 		expectedOutput(localcodedata)
 	}, [])
+
+	useEffect(() => {
+		expectedOutput(localcodedata)
+	}, [availableVariables])
+
+    var to_be_copied = "";
+	const HandleJsonCopy = (base, copy, base_node_name) => {
+    	if (typeof copy.name === "string") {
+    	  copy.name = copy.name.replaceAll(" ", "_");
+    	}
+
+    	//lol
+    	if (typeof base === 'object' || typeof base === 'dict') {
+    	  base = JSON.stringify(base)
+    	}
+
+    	if (base_node_name === "execution_argument" || base_node_name === "Execution Argument") {
+    	  base_node_name = "exec"
+    	}
+
+    	console.log("COPY: ", base_node_name, copy);
+
+    	//var newitem = JSON.parse(base);
+    	var newitem = validateJson(base).result
+    	to_be_copied = "$" + base_node_name.toLowerCase().replaceAll(" ", "_");
+    	for (let copykey in copy.namespace) {
+    	  if (copy.namespace[copykey].includes("Results for")) {
+    	    continue;
+    	  }
+
+    	  if (newitem !== undefined && newitem !== null) {
+    	    newitem = newitem[copy.namespace[copykey]];
+    	    if (!isNaN(copy.namespace[copykey])) {
+    	      to_be_copied += ".#";
+    	    } else {
+    	      to_be_copied += "." + copy.namespace[copykey];
+    	    }
+    	  }
+    	}
+
+    	if (newitem !== undefined && newitem !== null) {
+    	  newitem = newitem[copy.name];
+    	  if (!isNaN(copy.name)) {
+    	    to_be_copied += ".#";
+    	  } else {
+    	    to_be_copied += "." + copy.name;
+    	  }
+    	}
+
+    	to_be_copied.replaceAll(" ", "_");
+    	const elementName = "copy_element_shuffle";
+    	var copyText = document.getElementById(elementName);
+    	if (copyText !== null && copyText !== undefined) {
+    	  console.log("NAVIGATOR: ", navigator);
+    	  const clipboard = navigator.clipboard;
+    	  if (clipboard === undefined) {
+    	    toast("Can only copy over HTTPS (port 3443)");
+    	    return;
+    	  }
+
+    	  navigator.clipboard.writeText(to_be_copied);
+    	  copyText.select();
+    	  copyText.setSelectionRange(0, 99999); /* For mobile devices */
+
+    	  /* Copy the text inside the text field */
+    	  document.execCommand("copy");
+    	  console.log("COPYING!");
+    	  toast("Copied JSON path to clipboard.")
+    	} else {
+    	  console.log("Couldn't find element ", elementName);
+    	}
+  	}
 
 	const aiSubmit = (value, inputAction) => {
 		if (value === undefined || value === "") {
@@ -547,7 +592,6 @@ const CodeEditor = (props) => {
 		var code_lines = localcodedata.split('\n')
 		for (var i = 0; i < code_lines.length; i++){
 			var current_code_line = code_lines[i]
-			// console.log(current_code_line)
 
 			var variable_occurence = current_code_line.match(/[\\]{0,1}[$]{1}([a-zA-Z0-9_-]+\.?){1}([a-zA-Z0-9#_-]+\.?){0,}/g)
 
@@ -610,8 +654,7 @@ const CodeEditor = (props) => {
 					var correctVariable = availableVariables.includes(fixedVariable)
 					if(!correctVariable) {
 						value.markText({line:i, ch:dollar_occurence[occ]}, {line:i, ch:dollar_occurence_len[occ]+dollar_occurence[occ]}, {"css": "background-color: rgb(248, 106, 62, 0.9); padding-top: 2px; padding-bottom: 2px; color: white"})
-					}
-					else{
+					} else {
 						value.markText({line:i, ch:dollar_occurence[occ]}, {line:i, ch:dollar_occurence_len[occ]+dollar_occurence[occ]}, {"css": "background-color: #8b8e26; padding-top: 2px; padding-bottom: 2px; color: white"})
 					}
 					// console.log(correctVariables)
@@ -660,6 +703,23 @@ const CodeEditor = (props) => {
 		setlocalcodedata(updatedCode)
 	}
 
+	const fixStringInput = (new_input) => {
+		// Newline fixes
+		new_input = new_input.replace(/\r\n/g, "\\n")
+		new_input = new_input.replace(/\n/g, "\\n")
+
+		// Quote fixes
+		new_input = new_input.replace(/\\"/g, '"')
+		new_input = new_input.replace(/"/g, '\\"')
+
+		new_input = new_input.replace(/\\'/g, "'")
+		new_input = new_input.replace(/'/g, "\\'")
+
+
+		return new_input
+	}
+
+
 	const expectedOutput = (input) => {
 		
 		//const found = input.match(/[$]{1}([a-zA-Z0-9_-]+\.?){1}([a-zA-Z0-9#_-]+\.?){0,}/g)
@@ -674,35 +734,38 @@ const CodeEditor = (props) => {
 			try { 
 				for (var i = 0; i < found.length; i++) {
 					try {
-						// For found specifically, should replace .#\d with .# with regex
-						
-
-						//found[i] = found[i].toLowerCase()
 						const fixedVariable = fixVariable(found[i])
-						//var correctVariable = availableVariables.includes(fixedVariable)
-
-						// 
 						var valuefound = false
 						for (var j = 0; j < actionlist.length; j++) {
-							if(fixedVariable.slice(1,).toLowerCase() === actionlist[j].autocomplete.toLowerCase()){
-								valuefound = true 
+							if(fixedVariable.slice(1,).toLowerCase() !== actionlist[j].autocomplete.toLowerCase()){
+								continue
+							}
 
-								try {
-									if (typeof actionlist[j].example === "object") {
-										input = input.replace(found[i], JSON.stringify(actionlist[j].example), -1);
+							valuefound = true 
 
-									} else if (actionlist[j].example.trim().startsWith("{") || actionlist[j].example.trim().startsWith("[")) {
-										input = input.replace(found[i], JSON.stringify(actionlist[j].example), -1);
-									} else {
-										input = input.replace(found[i], actionlist[j].example, -1)
-									}
-								} catch (e) { 
-									input = input.replace(found[i], actionlist[j].example, -1)
+							console.log("Here. Checking if we got an example?")
+							try {
+								if (typeof actionlist[j].example === "object") {
+
+									input = input.replace(found[i], JSON.stringify(actionlist[j].example), -1);
+
+								} else if (actionlist[j].example.trim().startsWith("{") || actionlist[j].example.trim().startsWith("[")) {
+									input = input.replace(found[i], JSON.stringify(actionlist[j].example), -1);
+								} else {
+									console.log("This?")
+	
+									const newExample = fixStringInput(actionlist[j].example)
+									input = input.replace(found[i], newExample, -1)
 								}
-							} else {
-								// Couldn't find the correct example value
+							} catch (e) { 
+								input = input.replace(found[i], actionlist[j].example, -1)
 							}
 						}
+
+
+						//if (!valuefound) {
+						//	console.log("Couldn't find value "+fixedVariable)
+						//}
 
 						if (!valuefound && availableVariables.includes(fixedVariable)) {
 							var shouldbreak = false
@@ -714,46 +777,50 @@ const CodeEditor = (props) => {
 
 								for (var key in parsedPaths) {
 									const fullpath = "$"+actionlist[k].autocomplete.toLowerCase()+parsedPaths[key].autocomplete
-									if (fullpath === fixedVariable) {
-										//if (actionlist[k].example === undefined) {
-										//	actionlist[k].example = "TMP"
-										//}
+									if (fullpath !== fixedVariable) {
+										continue
+									}
 
-										var new_input = ""
-										try {
-											new_input = FindJsonPath(fullpath, actionlist[k].example)
-										} catch (e) {
-											console.log("ERR IN INPUT: ", e)
-										}
+									//if (actionlist[k].example === undefined) {
+									//	actionlist[k].example = "TMP"
+									//}
 
-										//console.log("Got output for: ", fullpath, new_input, actionlist[k].example, typeof new_input)
+									var new_input = ""
+									try {
+										new_input = FindJsonPath(fullpath, actionlist[k].example)
+									} catch (e) {
+										console.log("ERR IN INPUT: ", e)
+									}
 
-										if (typeof new_input === "object") {
-											new_input = JSON.stringify(new_input)
+									//console.log("Got output for: ", fullpath, new_input, actionlist[k].example, typeof new_input)
+
+									if (typeof new_input === "object") {
+										new_input = JSON.stringify(new_input)
+									} else {
+										if (typeof new_input === "string") {
+											// Check if it contains any newlines, and replace them with raw newlines
+											new_input = fixStringInput(new_input)	
+
+											// Replace quotes with nothing
 										} else {
-											if (typeof new_input === "string") {
-												new_input = new_input
-											} else {
-												console.log("NO TYPE? ", typeof new_input)
-												try {
-													new_input = new_input.toString()
-												} catch (e) {
-													new_input = ""
-												}
+											console.log("NO TYPE? ", typeof new_input)
+											try {
+												new_input = new_input.toString()
+											} catch (e) {
+												new_input = ""
 											}
 										}
-
-										//console.log("FOUND2: ", fixedVariable, actionlist[j].example)
-										input = input.replace(fixedVariable, new_input, -1)
-										input = input.replace(found[i], new_input, -1)
-
-										//} catch (e) {
-										//	input = input.replace(found[i], actionlist[k].example)
-										//}
-
-										shouldbreak = true 
-										break
 									}
+
+									input = input.replace(fixedVariable, new_input, -1)
+									input = input.replace(found[i], new_input, -1)
+
+									//} catch (e) {
+									//	input = input.replace(found[i], actionlist[k].example)
+									//}
+
+									shouldbreak = true 
+									break
 								}
 
 								if (shouldbreak) {
@@ -766,7 +833,7 @@ const CodeEditor = (props) => {
 					}
 				}
 			} catch (e) {
-				//console.log("Outer replace error: ", e)
+				console.log("Outer replace error: ", e)
 			}
 		}
 
@@ -895,7 +962,7 @@ const CodeEditor = (props) => {
 			aria-labelledby="draggable-code-modal"
 			disableBackdropClick={true}
 			disableEnforceFocus={true}
-      //style={{ pointerEvents: "none" }}
+      		//style={{ pointerEvents: "none" }}
 			hideBackdrop={true}
 			open={expansionModalOpen}
 			onClose={() => {
@@ -913,10 +980,10 @@ const CodeEditor = (props) => {
 				style: {
 					zIndex: 12501,
 					color: "white",
-					minWidth: isMobile ? "100%" : isFileEditor ? 650 : 1200,
-					maxWidth: isMobile ? "100%" : isFileEditor ? 650 : 1200,
-					minHeight: isMobile ? "100%" : 720,
-					maxHeight: isMobile ? "100%" : 720,
+					minWidth: isMobile ? "100%" : isFileEditor ? 650 : 1165,
+					maxWidth: isMobile ? "100%" : isFileEditor ? 650 : 1100,
+					minHeight: isMobile ? "100%" : 700,
+					maxHeight: isMobile ? "100%" : 700,
 					border: theme.palette.defaultBorder,
 					padding: isMobile ? "25px 10px 25px 10px" : 25,
 				},
@@ -926,8 +993,8 @@ const CodeEditor = (props) => {
 			style={{
 			  zIndex: 5000,
 			  position: "absolute",
-			  top: 14,
-			  right: 18,
+			  top: 6,
+			  right: 6,
 			  color: "grey",
 			}}
 			onClick={() => {
@@ -964,6 +1031,7 @@ const CodeEditor = (props) => {
 						}}
 					>
 						<div style={{display: "flex"}}>
+							{/*
 							<DialogTitle
 								id="draggable-dialog-title"
 								style={{
@@ -974,167 +1042,125 @@ const CodeEditor = (props) => {
 							>
 									Code Editor
 							</DialogTitle>
-							<IconButton
-								style={{
-									marginLeft: isMobile ? "80%" : 350, 
-									height: 50, 
-									width: 50, 
-								}}
-								onClick={() => {
-									
-								}}
-							>
-								<Tooltip
-									color="primary"
-									title={"Test Liquid in the playground"}
-									placement="top"
-								>
-									<a 
-										href="https://pwwang.github.io/liquidpy/playground/"
-										rel="norefferer"
-      		          target="_blank"
-									>
-										<ExtensionIcon style={{color: "rgba(255,255,255,0.7)"}}/>
-									</a>
-								</Tooltip>
-							</IconButton>
-							<IconButton
-								style={{
-									height: 50, 
-									width: 50, 
-								}}
-								disabled={isAiLoading}
-								onClick={() => {
-									autoFormat(localcodedata) 
-								}}
-							>
-								<Tooltip
-									color="primary"
-									title={"Auto format data"}
-									placement="top"
-								>
-									{isAiLoading ? 
-										<CircularProgress style={{height: 20, width: 20, color: "rgba(255,255,255,0.7)"}}/>
-										:
-										<AutoFixHighIcon style={{color: "rgba(255,255,255,0.7)"}}/>
-									}
-								</Tooltip>
-							</IconButton>
-						</div>
-					</div>   
-					}
-
-		
+							*/}
 					{ isFileEditor ? null :
-					<div style={{display: "flex"}}>
-						<Button
-							id="basic-button"
-							aria-haspopup="true"
-							aria-controls={liquidOpen ? 'basic-menu' : undefined}
-							aria-expanded={liquidOpen ? 'true' : undefined}
-							variant="outlined"
-							color="secondary"
-							style={{
-							  textTransform: "none",
-								width: 100, 
-							}}
-							onClick={(event) => {
-								setAnchorEl(event.currentTarget);
-							}}
-						>
-							Filters 
-						</Button>
-						<Menu
-							id="basic-menu"
-							anchorEl={anchorEl}
-							open={liquidOpen}
-							onClose={() => {
-								setAnchorEl(null);
-							}}
-							MenuListProps={{
-								'aria-labelledby': 'basic-button',
-							}}
-						>
-							{liquidFilters.map((item, index) => {
-								return (
-									<MenuItem key={index} onClick={() => {
-										handleClick(item)
-									}}>{item.name}</MenuItem>
-								)
-							})}
-						</Menu>
-						<Button
-							id="basic-button"
-							aria-haspopup="true"
-							aria-controls={mathOpen ? 'basic-menu' : undefined}
-							aria-expanded={mathOpen ? 'true' : undefined}
-							variant="outlined"
-							color="secondary"
-							style={{
-							  textTransform: "none",
-								width: 100, 
-							}}
-							onClick={(event) => {
-								setAnchorEl2(event.currentTarget);
-							}}
-						>
-							Math 
-						</Button>
-						<Menu
-							id="basic-menu"
-							anchorEl={anchorEl2}
-							open={mathOpen}
-							onClose={() => {
-								setAnchorEl2(null);
-							}}
-							MenuListProps={{
-								'aria-labelledby': 'basic-button',
-							}}
-						>
-							{mathFilters.map((item, index) => {
-								return (
-									<MenuItem key={index} onClick={() => {
-										handleClick(item)
-									}}>{item.name}</MenuItem>
-								)
-							})}
-						</Menu>
-						<Button
-							id="basic-button"
-							aria-haspopup="true"
-							aria-controls={pythonOpen ? 'basic-menu' : undefined}
-							aria-expanded={pythonOpen ? 'true' : undefined}
-							variant="outlined"
-							color="secondary"
-							style={{
-							  textTransform: "none",
-								width: 100, 
-							}}
-							onClick={(event) => {
-								setAnchorEl3(event.currentTarget);
-							}}
-						>
-							Python	
-						</Button>
-						<Menu
-							id="basic-menu"
-							anchorEl={anchorEl3}
-							open={pythonOpen}
-							onClose={() => {
-								setAnchorEl3(null);
-							}}
-							MenuListProps={{
-								'aria-labelledby': 'basic-button',
-							}}
-						>
-							{pythonFilters.map((item, index) => {
-								return (
-									<MenuItem key={index} onClick={() => {
-										handleClick(item)
-									}}>{item.name}</MenuItem>
-								)
-							})}
-						</Menu> 
+					<div style={{display: "flex", maxHeight: 40, }}>
+						{selectedAction.name === "execute_python" ? 
+							<Typography variant="body1" style={{marginTop: 5, }}>
+								Run Python Code
+							</Typography>
+						: 
+						<div style={{display: "flex", }}>
+							<Button
+								id="basic-button"
+								aria-haspopup="true"
+								aria-controls={liquidOpen ? 'basic-menu' : undefined}
+								aria-expanded={liquidOpen ? 'true' : undefined}
+								variant="outlined"
+								color="secondary"
+								style={{
+								  	textTransform: "none",
+									width: 100, 
+								}}
+								onClick={(event) => {
+									setAnchorEl(event.currentTarget);
+								}}
+							>
+								Filters 
+							</Button>
+							<Menu
+								id="basic-menu"
+								anchorEl={anchorEl}
+								open={liquidOpen}
+								onClose={() => {
+									setAnchorEl(null);
+								}}
+								MenuListProps={{
+									'aria-labelledby': 'basic-button',
+								}}
+							>
+								{liquidFilters.map((item, index) => {
+									return (
+										<MenuItem key={index} onClick={() => {
+											handleClick(item)
+										}}>{item.name}</MenuItem>
+									)
+								})}
+							</Menu>
+							<Button
+								id="basic-button"
+								aria-haspopup="true"
+								aria-controls={mathOpen ? 'basic-menu' : undefined}
+								aria-expanded={mathOpen ? 'true' : undefined}
+								variant="outlined"
+								color="secondary"
+								style={{
+								  textTransform: "none",
+									width: 100, 
+								}}
+								onClick={(event) => {
+									setAnchorEl2(event.currentTarget);
+								}}
+							>
+								Math 
+							</Button>
+							<Menu
+								id="basic-menu"
+								anchorEl={anchorEl2}
+								open={mathOpen}
+								onClose={() => {
+									setAnchorEl2(null);
+								}}
+								MenuListProps={{
+									'aria-labelledby': 'basic-button',
+								}}
+							>
+								{mathFilters.map((item, index) => {
+									return (
+										<MenuItem key={index} onClick={() => {
+											handleClick(item)
+										}}>{item.name}</MenuItem>
+									)
+								})}
+							</Menu>
+							<Button
+								id="basic-button"
+								aria-haspopup="true"
+								aria-controls={pythonOpen ? 'basic-menu' : undefined}
+								aria-expanded={pythonOpen ? 'true' : undefined}
+								variant="outlined"
+								color="secondary"
+								style={{
+								  textTransform: "none",
+									width: 100, 
+								}}
+								onClick={(event) => {
+									setAnchorEl3(event.currentTarget);
+								}}
+							>
+								Python	
+							</Button>
+							<Menu
+								id="basic-menu"
+								anchorEl={anchorEl3}
+								open={pythonOpen}
+								onClose={() => {
+									setAnchorEl3(null);
+								}}
+								MenuListProps={{
+									'aria-labelledby': 'basic-button',
+								}}
+							>
+								{pythonFilters.map((item, index) => {
+									return (
+										<MenuItem key={index} onClick={() => {
+											handleClick(item)
+										}}>{item.name}</MenuItem>
+									)
+								})}
+							</Menu> 
+						</div>
+						}
 						<Button
 							id="basic-button"
 							aria-haspopup="true"
@@ -1143,9 +1169,9 @@ const CodeEditor = (props) => {
 							variant="outlined"
 							color="secondary"
 							style={{
-							  textTransform: "none",
+							  	textTransform: "none",
 								width: 130, 
-								marginLeft: 170, 
+								marginLeft: 20, 
 							}}
 							onClick={(event) => {
 								setMenuPosition({
@@ -1257,7 +1283,7 @@ const CodeEditor = (props) => {
 											handleItemClick([innerdata]);
 										}}
 									>
-										<Paper style={{minHeight: 500, maxHeight: 500, minWidth: 275, maxWidth: 275, position: "fixed", top: menuPosition1.top-200, left: menuPosition1.left-270, padding: "10px 0px 10px 10px", backgroundColor: theme.palette.inputColor, overflow: "hidden", overflowY: "auto", border: "1px solid rgba(255,255,255,0.3)",}}>
+										<Paper style={{minHeight: 550, maxHeight: 550, minWidth: 275, maxWidth: 275, position: "fixed", top: menuPosition1.top-200, left: menuPosition1.left-270, padding: "10px 0px 10px 10px", backgroundColor: theme.palette.inputColor, overflow: "hidden", overflowY: "auto", border: "1px solid rgba(255,255,255,0.3)",}}>
 											<MenuItem
 												key={innerdata.name}
 												style={{
@@ -1393,235 +1419,215 @@ const CodeEditor = (props) => {
 						</Menu>
 					</div> 
 					}
-					<span style={{
+							<IconButton
+								style={{
+									marginLeft: isMobile ? "80%" : 30, 
+									height: 50, 
+									width: 50, 
+								}}
+								onClick={() => {
+									
+								}}
+							>
+								<Tooltip
+									color="primary"
+									title={"Test Liquid in the playground"}
+									placement="top"
+								>
+									<a 
+										href="https://pwwang.github.io/liquidpy/playground/"
+										rel="norefferer"
+      		          target="_blank"
+									>
+										<ExtensionIcon style={{color: "rgba(255,255,255,0.7)"}}/>
+									</a>
+								</Tooltip>
+							</IconButton>
+							<IconButton
+								style={{
+									height: 50, 
+									width: 50, 
+								}}
+								disabled={isAiLoading}
+								onClick={() => {
+									autoFormat(localcodedata) 
+								}}
+							>
+								<Tooltip
+									color="primary"
+									title={"Auto format data"}
+									placement="top"
+								>
+									{isAiLoading ? 
+										<CircularProgress style={{height: 20, width: 20, color: "rgba(255,255,255,0.7)"}}/>
+										:
+										<AutoFixHighIcon style={{color: "rgba(255,255,255,0.7)"}}/>
+									}
+								</Tooltip>
+							</IconButton>
+						</div>
+					</div>   
+					}
+
+		
+					
+					<div style={{
 						borderRadius: theme.palette.borderRadius,
 						position: "relative",
+						paddingTop: 0, 
+						// minHeight: 548,
+						// overflow: "hidden",
 					}}>
 						<CodeMirror
+						    theme={vscodeDark}
 							value={localcodedata}
-							height={isFileEditor ? 450 : 525} 
-							width={isFileEditor ? 650 : 600}
+							extensions={[python({ py: true })]}
+							height={isFileEditor ? 450 : 450} 
+							width={isFileEditor ? 650 : 550}
 							style={{
-								maxWidth: isFileEditor ? 450 : 500,
+								maxWidth: isFileEditor ? 450 : 600,
+								maxHeight: 450,
+								minHeight: 450, 
 								wordBreak: "break-word",
 								marginTop: 0,
-								paddingTop: 0,
-								backgroundColor: "rgba(40,40,40,1)",
-								minHeight: 470, 
+								paddingBottom: 10,
+								// overflow: "hidden",
+								overflowY: "auto",
+  								whiteSpace: "pre-wrap",
+  								wordWrap: "break-word",
 							}}
 							onCursorActivity = {(value) => {
-								// console.log(value.getCursor())
+								console.log("CURSOR: ", value.getCursor())
 								setCurrentCharacter(value.getCursor().ch)
 								setCurrentLine(value.getCursor().line)
 								// console.log(value.getCursor().ch, value.getCursor().line)
 								findIndex(value.getCursor().line, value.getCursor().ch)
+
 								highlight_variables(value)
 							}}
 							onChange={(value, viewUpdate) => {
-								console.log("Value: ", value, viewUpdate)
 								setlocalcodedata(value)
 								expectedOutput(value)
+
+								highlight_variables(value)
 
 								//if(value.display.input.prevInput.startsWith('$') || value.display.input.prevInput.endsWith('$')){
 								//	setEditorPopupOpen(true)
 								//}
 							}}
-							extensions={[]}//indentWithTab]}
-							theme={shuffleTheme}
 							options={{
-								styleSelectedText: true,
-								keyMap: 'sublime',
 								mode: validation === true ? "json" : "python",
-								lineWrapping: linewrap,
+								lineWrapping: true,
+								theme: vscodeDark,
+								lineNumbers: true,
 							}}
 						/>
-					</span>
-
-					{/*editorPopupOpen ?
-						<Paper
-							style={{
-								margin: 10,
-								padding: 10,
-								width: isMobile ? "100%" : 250,
-								height: 95,
-								overflowY: 'auto',
-								// textOverflow: 'ellipsis'
-							}}
-						>
-							{mainVariables.map((data, index) => {
-								// console.log(data)
-								return (
-									<div
-										style={{
-											// textOverflow: 'ellipsis'
-										}}
-									>
-										<button
-											onClick={() => {
-												replaceVariables(data.substring(1,))
-												// console.log(currentCharacter, currentLine)
-											}}
-											style={{
-												backgroundColor: 'transparent',
-												color: 'white',
-												border: 'none',
-												padding: 7.5,
-												cursor: 'pointer',
-												width: '100%',
-												textAlign: 'left'
-											}}
-										>
-											{data.substring(0, 25)}
-										</button>
-									</div>
-								)
-							})}
-						</Paper>
-					: null*/}
+					</div>
 				
 					<div
 						style={{
 						}}
 					>
-						{/*
-						<Typography
-							variant = 'body2'
-							color = 'textSecondary'
-							style={{
-								color: "white",
-								paddingLeft: 340,
-								width: 50,
-								display: 'inline',
-							}}
-						>
-							Line Wrap
-							<Checkbox
-								onClick={() => {
-									if (linewrap) {
-										setlinewrap(false)
-									}
-									if (!linewrap){
-										setlinewrap(true)
-									}
-								}}
-								defaultChecked
-								size="small"
-								sx={{
-									color: orange[600],
-									'&.Mui-checked': {
-									  color: orange[800],
-									},
-								}}
-							/>
-						</Typography>
-
-						<Typography
-							variant = 'body2'
-							color = 'textSecondary'
-							style={{
-								color: "white",
-								paddingLeft: 10,
-								width: 100,
-								display: 'inline',
-							}}
-						>
-							Dark Theme
-							<Checkbox
-								onClick={() => {
-									if (codeTheme === "gruvbox-dark") {
-										setcodeTheme("duotone-light")
-									}
-									if (codeTheme === "duotone-light"){
-										setcodeTheme("gruvbox-dark")
-									}
-								}}
-								defaultChecked
-								size="small"
-								sx={{
-									color: orange[600],
-									'&.Mui-checked': {
-									  color: orange[800],
-									},
-								}}
-							/>
-						</Typography>
-						*/}
-
 					</div>
 				</div>
 
-				<div style={{flex: 1, marginLeft: 25, }}>
+				<div style={{flex: 1, marginLeft: 5, borderLeft: "1px solid rgba(255,255,255,0.3)", paddingLeft: 5, }}>
 					{isFileEditor ? null : 
 						<div>
 							{isMobile ? null : 
 								<DialogTitle
 									style={{
 										paddingLeft: 10, 
+										paddingTop: 0, 
 										display: "flex", 
 									}}
 								>
-									<span style={{color: "white"}}>
-										Expected Output
-									</span>
-
-									<IconButton disabled={executing} color="primary" style={{border: `1px solid ${theme.palette.primary.main}`, marginLeft: 100, padding: 8}} variant="contained" onClick={() => {
-										executeSingleAction(expOutput)
-									}}>
-										<Tooltip title="Try it! This runs the Shuffle Tools 'repeat back to me' or 'execute python' action with what you see in the expected output window. Commonly used to test your Python scripts or Liquid filters, not requiring the full workflow to run again." placement="top">
-											{executing ? <CircularProgress style={{height: 18, width: 18, }} /> : <PlayArrowIcon style={{height: 18, width: 18, }} /> }
-														 
-										</Tooltip>
-									</IconButton>
+									<div>
+										<span style={{color: "white"}}>
+											Expected Output
+										</span>
+									</div>
 
 								</DialogTitle>
 							}
-
-							{isMobile ? null : 
-								validation === true ? 
-									<ReactJson
-										src={expOutput}
-										theme={theme.palette.jsonTheme}
+							<div style={{position: "relative", }}>
+								<Tooltip title="Try it! This runs the Shuffle Tools 'repeat back to me' or 'execute python' action with what you see in the expected output window. Commonly used to test your Python scripts or Liquid filters, not requiring the full workflow to run again." placement="top">
+									<Button 
+										variant="outlined" 
+										disabled={executing} 
+										color="primary" 
 										style={{
-											borderRadius: 5,
-											border: `2px solid ${theme.palette.inputColor}`,
-											padding: 10, 
-											maxHeight: 500, 
-											minheight: 500, 
-											overflow: "auto",
-										}}
-										collapsed={false}
-										enableClipboard={(copy) => {
-											//handleReactJsonClipboard(copy);
-										}}
-										displayDataTypes={false}
-										onSelect={(select) => {
-											//HandleJsonCopy(validate.result, select, "exec");
-										}}
-										name={"JSON autocompletion"}
-									/>
-								:
-									<p
-										id='expOutput'
-										style={{
-											whiteSpace: "pre-wrap",
-											color: "#ebdbb2",
-											fontFamily: "monospace",
-											backgroundColor: "#282828",
-											padding: 10,
-											marginTop: -2,
-											border: `2px solid ${theme.palette.inputColor}`,
-											borderRadius: theme.palette.borderRadius,
-											maxHeight: 500,
-											minHeight: 500, 
-											minWidth: 500,
-											maxWidth: 500,
-											overflow: "auto", 
-											whiteSpace: "pre-wrap",
+											border: `1px solid ${theme.palette.primary.main}`, 
+											position: "absolute",
+											top: 10,
+											right: 10, 
+											maxHeight: 35, 
+											minWidth: 70, 
+										}} 
+										onClick={() => {
+											executeSingleAction(expOutput)
 										}}
 									>
-										{expOutput}
-									</p>
-							}
+										{executing ? 
+											<CircularProgress style={{height: 18, width: 18, }} /> 
+												: 						
+											<span>Try it <PlayArrowIcon style={{height: 18, width: 18, marginBottom: -4, marginLeft: 5,  }} /> </span>
+										}
+									</Button>
+								</Tooltip>
+
+								{isMobile ? null : 
+									validation === true ? 
+										<ReactJson
+											src={expOutput}
+											theme={theme.palette.jsonTheme}
+											style={{
+												borderRadius: 5,
+												border: `2px solid ${theme.palette.inputColor}`,
+												padding: 10, 
+												maxHeight: 450, 
+												minheight: 450, 
+												overflow: "auto",
+											}}
+											collapsed={false}
+											enableClipboard={(copy) => {
+												//handleReactJsonClipboard(copy);
+											}}
+											displayDataTypes={false}
+											onSelect={(select) => {
+												var basename = "exec"
+												if (selectedAction !== undefined && selectedAction !== null && Object.keys(selectedAction).length !== 0) {
+													basename = selectedAction.label.toLowerCase().replaceAll(" ", "_")
+												}
+
+												HandleJsonCopy(expOutput, select, basename)
+											}}
+											name={"JSON autocompletion"}
+										/>
+									:
+										<p
+											id='expOutput'
+											style={{
+												whiteSpace: "pre-wrap",
+												color: "#ebdbb2",
+												fontFamily: "monospace",
+												backgroundColor: "#282828",
+												padding: 10,
+												marginTop: -2,
+												border: `2px solid ${theme.palette.inputColor}`,
+												borderRadius: theme.palette.borderRadius,
+												maxHeight: 450,
+												minHeight: 450, 
+												minWidth: 480,
+												maxWidth: "100%",
+												overflow: "auto", 
+												whiteSpace: "pre-wrap",
+											}}
+										>
+											{expOutput}
+										</p>
+								}
+							</div>
 
 							{executionResult.valid === true ? 
 								<ReactJson
@@ -1641,7 +1647,7 @@ const CodeEditor = (props) => {
 									}}
 									displayDataTypes={false}
 									onSelect={(select) => {
-										//HandleJsonCopy(validate.result, select, "exec");
+										//HandleJsonCopy(executionResult.result, select, "exec");
 									}}
 									name={"Test result"}
 								/>
@@ -1657,9 +1663,18 @@ const CodeEditor = (props) => {
 										</Typography> 
 									</span>
 								: 
-									<Typography variant="body2" style={{maxHeight: 150, overflow: "auto", marginTop: 20,}}>
-										No test output yet.
-									</Typography>
+
+									<div>
+										<Typography
+											variant = 'body2'
+											color = 'textSecondary'
+										>
+											Output is based on the last VALID run of the node(s) you are referencing. Only updates when you refresh the Workflow Window.
+										</Typography>
+										<Typography variant="body2" style={{maxHeight: 150, overflow: "auto", marginTop: 20,}}>
+											No test output yet.
+										</Typography>
+									</div>
 								}
 								{executionResult.errors !== undefined && executionResult.errors !== null && executionResult.errors.length > 0 ?
 									<Typography variant="body2" style={{maxHeight: 100, overflow: "auto", color: "#f85a3e",}}>
@@ -1677,7 +1692,7 @@ const CodeEditor = (props) => {
 			</div>
 
 
-			<div style={{display: 'flex',}}>
+			<div style={{display: 'flex'}}>
 				<Button
 					style={{
 						height: 35,

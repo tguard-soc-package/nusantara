@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useInterval } from "react-powerhooks";
 import { toast } from 'react-toastify';
+import theme from "../theme.jsx";
 
 import {
   InputAdornment,
@@ -31,6 +32,8 @@ import {
 import { FixName } from "../views/Apps.jsx";
 import aa from 'search-insights'
 
+import AuthenticationOauth2 from "../components/Oauth2Auth.jsx";
+
 // Handles workflow updates on first open to highlight the issues of the workflow
 // Variables
 // Action (exists, missing fields)
@@ -41,7 +44,6 @@ import aa from 'search-insights'
 const ConfigureWorkflow = (props) => {
   const {
     apps,
-    theme,
     isCloud,
     workflow,
 	userdata,
@@ -60,6 +62,8 @@ const ConfigureWorkflow = (props) => {
     setAuthenticationType,
     setAuthenticationModalOpen,
     setConfigureWorkflowModalOpen,
+
+	setConfigurationFinished,
   } = props;
 
   const [requiredActions, setRequiredActions] = React.useState([]);
@@ -70,8 +74,15 @@ const ConfigureWorkflow = (props) => {
   const [firstLoad, setFirstLoad] = React.useState("");
   const [showFinalizeAnimation, setShowFinalizeAnimation] = React.useState(false);
   const [loopRunning, setLoopRunning] = useState(false)
-
   const [checkStarted, setCheckStarted] = React.useState(false);
+
+  useEffect(() => { 
+	  if (requiredActions.length === 0) { 
+		  if (setConfigurationFinished !== undefined) {
+			setConfigurationFinished(true)
+		  }
+	  }
+  }, [requiredActions])
 
   const stop = () => {
 	  setLoopRunning(false)
@@ -80,6 +91,7 @@ const ConfigureWorkflow = (props) => {
   const start = () => {
 	  setLoopRunning(true)
   }
+
 
   useEffect(() => {
 	  if (loopRunning) {
@@ -159,7 +171,6 @@ const ConfigureWorkflow = (props) => {
         return response.json();
       })
       .then((responseJson) => {
-        console.log("ACTION: ", responseJson);
         if (
           responseJson.actions !== undefined &&
           responseJson.actions !== null
@@ -176,7 +187,7 @@ const ConfigureWorkflow = (props) => {
       console.log("No apps loaded: ", apps);
 
 	  if (setConfigureWorkflowModalOpen !== undefined) {
-      	setConfigureWorkflowModalOpen(false);
+      	setConfigureWorkflowModalOpen(false)
 	  }
 
       return null;
@@ -187,7 +198,7 @@ const ConfigureWorkflow = (props) => {
     const newactions = [];
     for (let [key, keyval] in Object.entries(workflow.actions)) {
 
-      const action = workflow.actions[key];
+      var action = JSON.parse(JSON.stringify(workflow.actions[key]))
       var newaction = {
         large_image: action.large_image,
         app_name: action.app_name,
@@ -208,13 +219,69 @@ const ConfigureWorkflow = (props) => {
 		  action.app_name = action.app_name.slice(0, -4)
 	  }
 
+	  if (action.app_name === "Integration Framework") {
+		  var selected_app = ""
+		  for (var paramkey in action.parameters) {
+			  const param = action.parameters[paramkey]
+
+			  if (param.name === "app_name") {
+				  selected_app = param.value
+				  break
+			  }
+		  }
+
+		  for (var appauth in appAuthentication) {
+			  if (appAuthentication[appauth].app.name.toLowerCase() === selected_app.toLowerCase()) {
+				  newaction.auth_done = true
+				  break
+			  }
+		  }
+
+		  if (newaction.auth_done) {
+			  continue
+		  }
+
+		  for (var appkey in apps) {
+			  if (apps[appkey].name.toLowerCase() === selected_app.toLowerCase()) {
+				  newaction.app_name = apps[appkey].name
+				  newaction.app_version = apps[appkey].app_version
+				  newaction.app = apps[appkey]
+				  newaction.app_id = apps[appkey].id
+
+				  newaction.must_activate = false 
+				  newaction.must_authenticate = true
+
+				  newaction.steps.push({
+					"title": "Authenticate app",
+					"type": "authenticate",
+					"required": true,
+				  })
+
+		  		  action.app_id = apps[appkey].id
+				  action.authentication_id = ""
+				  action.authentication = {
+					  "required": true,
+				  }
+
+				  break
+			  }
+		  }
+
+		  if (newaction.app.id === undefined) {
+			  console.log("Failed to find app: ", selected_app)
+			  continue
+		  }
+
+		  newaction.update_version = "1.1.0"
+	  }
+
 	  // ID match OR name match + version match 
       //const app = apps.find((app) => app.id === action.app_id || (app.name === action.app_name && (app.app_version === action.app_version || (app.loop_versions !== null && app.loop_versions.includes(action.app_version)))))
-		//
 
 	  // without version match
 	  const newappname = action.app_name.toLowerCase().replaceAll(" ", "_")
-      const app = apps.find((app) => app.id === action.app_id || app.name.toLowerCase().replaceAll(" ", "_") === newappname)
+      var app = apps.find((app) => app.id === action.app_id || app.name.toLowerCase().replaceAll(" ", "_") === newappname)
+
       if (app === undefined || app === null) {
 
       	const subapp = apps.find(app => app.name === action.app_name)
@@ -229,51 +296,70 @@ const ConfigureWorkflow = (props) => {
 			"required": true,
 		})
       } else {
+        if (action.authentication_id !== "" && app.authentication.required === true) {
+			var authFound = false
+			for (var authkey in appAuthentication) {
+				if (appAuthentication[authkey].id === action.authentication_id) {
+					authFound = true
+					break
+				}
+			}
+
+			if (!authFound) {
+				action.authentication_id = ""
+			}
+		}
+
         if (action.authentication_id === "" && app.authentication.required === true && action.parameters !== undefined && action.parameters !== null) {
-          // Check if configuration is filled or not
+		  // Check if configuration is filled or not
           var filled = true;
           for (let [key,keyval] in Object.entries(action.parameters)) {
             if (action.parameters[key].configuration) {
-              //console.log("Found config: ", action.parameters[key])
-              if (
-                action.parameters[key].value === null ||
-                action.parameters[key].value.length === 0
-              ) {
+              if (action.parameters[key].value === null || action.parameters[key].value.length === 0) {
                 filled = false;
                 break;
               }
             }
           }
 
+		  if (app.authentication.type === "oauth2" || app.authentication.type === "oauth2-app") {
+			  filled = false
+			
+			  action.auth_type = "oauth2"
+		  }
+
 		  newaction.steps.push({
 		  	"title": "Authenticate app",
 		  	"type": "authenticate",
 		  	"required": true,
+			"auth_type": app.authentication.type,
 		  })
 
           if (!filled) {
             newaction.must_authenticate = true;
             newaction.action_ids.push(action.id);
           }
-        } else if (action.authentication_id !== "" && app.authentication.required === true) {
-			console.log("Should verify authentication ID ", action.authentication_id)
+
+        } else if (action.authentication_id !== undefined && action.authentication_id !== null && action.authentication_id !== "" && app.authentication.required === true) {
+			console.log("FIXME: Should verify authentication ID ", action.authentication_id)
 		}
 
         newaction.app = app;
       }
 
-      if (
-        action.errors !== undefined &&
-        action.errors !== null &&
-        action.errors.length > 0
-      ) {
+
+      if (newaction.errors !== undefined && newaction.errors !== null && newaction.errors.length > 0) {
         //console.log("Node has errors!: ", action.errors)
       }
 
+	  //console.log(newaction.app_name,"AUTH: ", newaction.must_authenticate, " ACTIVATE: ", newaction.must_activate)
+		  
       if (newaction.must_authenticate) {
-        var authenticationOptions = [];
+
+        var authenticationOptions = []
         for (let [key,keyval] in Object.entries(appAuthentication)) {
-          const auth = appAuthentication[key];
+          const auth = appAuthentication[key]
+
           if (auth.app.name === app.name && auth.active) {
             //console.log("Found auth: ", auth)
             authenticationOptions.push(auth);
@@ -382,42 +468,43 @@ const ConfigureWorkflow = (props) => {
 				continue;
 			  }
 
-			  requiredTriggers.push(trigger);
+			  requiredTriggers.push(trigger)
 			}
 		}
 
-		if (requiredTriggers.length === 0 && requiredVariables.length === 0 && newactions.length === 0 && setConfigureWorkflowModalOpen !== undefined) {
-		  setConfigureWorkflowModalOpen(false);
+		if (setConfigureWorkflowModalOpen !== undefined && requiredTriggers.length === 0 && requiredVariables.length === 0 && newactions.length === 0 ) {
+		  console.log("No required triggers, variables or actions. Closing modal.")
+		  setConfigureWorkflowModalOpen(false)
 		}
 
-		setRequiredTriggers(requiredTriggers);
-		setRequiredVariables(requiredVariables);
-		setRequiredActions(newactions);
+		//setRequiredTriggers(requiredTriggers)
+		setRequiredVariables(requiredVariables)
+		setRequiredActions(newactions)
 	}
 
-  if (appAuthentication !== undefined && previousAuth !== undefined && appAuthentication.length !== previousAuth.length) {
-    var newactions = []
-    for (let [actionkey, actionkeyval] in Object.entries(requiredActions)) {
-      var newaction = requiredActions[actionkey];
-      const app = newaction.app;
+    if (appAuthentication !== undefined && previousAuth !== undefined && appAuthentication.length !== previousAuth.length) {
+      var newactions = []
+      for (let [actionkey, actionkeyval] in Object.entries(requiredActions)) {
+        var newaction = requiredActions[actionkey];
+        const app = newaction.app;
 
-      for (let [key,keyval] in Object.entries(appAuthentication)) {
-        const auth = appAuthentication[key];
+        for (let [key,keyval] in Object.entries(appAuthentication)) {
+          const auth = appAuthentication[key];
 
-				// Does this account for all the different ones of the same? 
-        if (auth.app.name === app.name && auth.active === true) {
-          newaction.auth_done = true;
-          break;
+      			// Does this account for all the different ones of the same? 
+          if (auth.app.name === app.name && auth.active === true) {
+            newaction.auth_done = true;
+            break;
+          }
         }
+
+        newactions.push(newaction);
       }
 
-      newactions.push(newaction);
-    }
-
-    setRequiredActions(newactions);
-    setPreviousAuth(appAuthentication);
-    // Set auth done to true
-    //"auth_done": false
+      setRequiredActions(newactions);
+      setPreviousAuth(appAuthentication);
+      // Set auth done to true
+      //"auth_done": false
   }
 
   const TriggerSection = (props) => {
@@ -514,7 +601,7 @@ const ConfigureWorkflow = (props) => {
             <TextField
               style={{
                 backgroundColor: theme.palette.inputColor,
-                borderRadius: 5,
+                borderRadius: theme.palette.borderRadius,
               }}
               InputProps={{
                 endAdornment: <InputAdornment position="end"></InputAdornment>,
@@ -585,10 +672,10 @@ const ConfigureWorkflow = (props) => {
       .then((responseJson) => {
         if (responseJson.success === false) {
         	if (responseJson.reason !== undefined) {
-          	toast("Failed to activate the app: "+responseJson.reason);
-					} else {
-          	toast("Failed to activate the app");
-					}
+				toast("Failed to activate the app: "+responseJson.reason);
+			} else {
+				toast("Failed to activate the app");
+			}
         } else {
           toast("App activated for your organization!");
         }
@@ -610,14 +697,24 @@ const ConfigureWorkflow = (props) => {
 	const [authFields, setAuthFields] = useState([])
 	const [sensitiveFields, setSensitiveFields] = useState([])
 
+	//console.log("ACTION", action)
+									
+	useEffect(() => {
+		if (finalized === true) {
+			setOpened(false)
+			setFilled(true)
+		}
+	}, [finalized])
+
 	if (authFields.length === 0 && opened === true) {
 		// Loop through fields of the action
+			  
 
 		var newfields = []
-		const params = action.action.parameters
 
-		var sensitiveIndexes = []
 		var index = 0
+		var sensitiveIndexes = []
+		const params = action.action.parameters
 		for (let key in params) {
 			const param = params[key]
 
@@ -674,9 +771,9 @@ const ConfigureWorkflow = (props) => {
 		  })
 		  .then((responseJson) => {
 			if (!responseJson.success) {
-			  toast("Failed to set app auth: " + responseJson.reason);
+			  toast("Failed to set app authentication: " + responseJson.reason);
 			} else {
-			  toast("App auth set for app " + app.name.replace("_", " "));
+			  toast("App authentication set for app " + app.name.replace("_", " "));
 			  setFinalized(true)
 			  setOpened(false)
 			}
@@ -700,6 +797,7 @@ const ConfigureWorkflow = (props) => {
 
 	parsedName = (parsedName.charAt(0).toUpperCase() + parsedName.slice(1)).replaceAll("_", " ");
 
+	console.log("AUTH Action: ", action)
 	return (
 		<ListItem 
 			style={{padding: 0, display: "flex", flexDirection: "column", }}
@@ -713,6 +811,25 @@ const ConfigureWorkflow = (props) => {
 				<div style={{display: "flex", }}
 					onClick={() => {
 						setOpened(!opened);
+
+						// Scroll to it
+						const element = document.getElementById("app-config");
+						if (element) {
+							// Scroll down 100px 
+							setTimeout(() => {
+								element.scrollIntoView({
+									behavior: "smooth",
+									top: 100,
+								})
+
+								//element.scrollIntoView({ 
+								//	behavior: "smooth", 
+								//	block: "center", 
+								//	inline: "center" 
+								//});
+							}, 250)
+						}
+
 					}}
 				>
 					<div style={{display: "flex", flex: 7, }}>
@@ -732,9 +849,34 @@ const ConfigureWorkflow = (props) => {
 						<CheckIcon style={{color: theme.palette.green, marginLeft: 10, marginTop: 10, flex: 1, }} />
 						: null}
 				</div>
+
 				{opened ?
 					<div style={{padding: 12, }}>
-						{authFields.map((field, index) => {
+	
+						{action.app.authentication.type === "oauth2-app" || action.app.authentication.type === "oauth2" || action.auth_type === "oauth2" ?
+							<div>
+								<AuthenticationOauth2
+									selectedApp={action.app}
+									selectedAction={{
+										"app_name": action.app.name,
+										"app_id": action.app.id,
+										"app_version": action.app.version,
+										"large_image": action.app.large_image,
+									}}
+									authenticationType={action.app.authentication}
+									isCloud={isCloud}
+									authButtonOnly={true}
+
+									isLoggedIn={true}
+									getAppAuthentication={undefined}
+
+									setFinalized={setFinalized}
+								/>
+							</div>
+							: 
+						authFields.map((field, index) => {
+							console.log("THESE FIELDS?: ", field)
+
 							var parsedName = field.key
 							// Remove _basic at the end if it exists
 							if (parsedName.toLowerCase().endsWith("_basic")) {
@@ -807,25 +949,28 @@ const ConfigureWorkflow = (props) => {
 								</div>
 							)
 						})}
-						<Button
-							variant="contained"
-							color="primary"
-							style={{
-								marginTop: 15,
-								width: 150,
-								marginLeft: 135, 
-							}}
-							disabled={!filled || submitted}
-							onClick={() => {
-								setSubmitted(true);
 
-								// const submitLocalAuth = (app, fields) => {
-								submitLocalAuth({"id": action.app.id, "name": action.app.name, "version": action.app.version, "large_image": action.large_image, }, authFields);
-									
-							}}
-						>
-							{submitted ? <CircularProgress style={{color: theme.palette.primary.main, }} /> : "Submit"}
-						</Button>
+						{action.app.authentication.type !== "oauth2-app" && action.app.authentication.type !== "oauth2" ?  
+							<Button
+								variant="contained"
+								color="primary"
+								style={{
+									marginTop: 15,
+									width: 150,
+									marginLeft: 135, 
+								}}
+								disabled={!filled || submitted}
+								onClick={() => {
+									setSubmitted(true);
+
+									// const submitLocalAuth = (app, fields) => {
+									submitLocalAuth({"id": action.app.id, "name": action.app.name, "version": action.app.version, "large_image": action.large_image, }, authFields);
+										
+								}}
+							>
+								{submitted ? <CircularProgress style={{color: theme.palette.primary.main, }} /> : "Submit"}
+							</Button>
+						: null}
 					</div>
 				: null}
 			</div>
@@ -840,6 +985,7 @@ const ConfigureWorkflow = (props) => {
     if (action.app_name.toLowerCase().endsWith("_api")) {
 		parsedName = parsedName.substring(0, parsedName.length - 4);
 	}
+
 
     return (
       <ListItem>
@@ -985,7 +1131,7 @@ const ConfigureWorkflow = (props) => {
 							src={action.large_image}
 						/>
 						<Typography style={{ margin: 0, marginLeft: 10 }} variant="body1">
-							Activate
+							Activate {action.app_name.replaceAll("_", " ")}
 						</Typography>
 					</Button>
 				: 
@@ -1235,33 +1381,37 @@ const ConfigureWorkflow = (props) => {
 		)
 	}
 
-	const topColor = "#f86a3e, #fc3922"
   return (
     <div>
-	  	{setConfigureWorkflowModalOpen !== undefined ? 
-			<div style={{height: 75, width: "100%", background: `linear-gradient(to right, ${topColor}`, position: "relative",}} />
-		: null}
-		<div style={{margin: setConfigureWorkflowModalOpen !== undefined ? "0px 50px 0px 50px" : "35px 0px 0px", maxHeight: 475, }}>
+		<div style={{margin: setConfigureWorkflowModalOpen !== undefined ? "0px 50px 0px 50px" : "35px 0px 0px 0px", maxHeight: 475, }}>
 			
 
 	  	{setConfigureWorkflowModalOpen !== undefined ? 
-      		<Typography variant="h6">{workflow.name}</Typography>
+      		<Typography variant="h6">
+				{workflow.name}
+			</Typography>
 			: null
 		}
 
-      	<Typography variant="body2" style={{}}>
-		  Please configure the following apps for automatic startup of automation:
-      	</Typography>
       	{requiredActions.length > 0 ? (
       	  <span>
+			<Typography variant="body2" style={{}}>
+			  Please configure the following steps to help us complete your workflow. This can also be done later.
+			</Typography>
+
 			{setConfigureWorkflowModalOpen !== undefined ?
 				<Typography variant="body1" style={{ marginTop: 10, }}>
 				  Required Actions
 				</Typography>
 			: null}
 
-      	    <List style={{paddingBottom: 250, }}>
+      	    <List style={{paddingBottom: window.location.pathname.includes("/workflows/") ? 0 : 350, }}>
       	      {requiredActions.map((data, index) => {
+
+				// AppWrapper = Default in a workflow, only shows with steps
+				// AppSection = 
+				// AppSectionSelfcontained = default for template generator
+
       	        return (
 					<div key={index} style={{marginBottom: 10, }}>
 						{data.steps !== undefined && data.steps !== null && data.show_steps === true && setConfigureWorkflowModalOpen !== undefined ?

@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-#
 #  IRIS Source Code
 #  Copyright (C) 2021 - Airbus CyberSecurity (SAS)
 #  ir@cyberactionlab.net
@@ -17,21 +15,19 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, write to the Free Software Foundation,
 #  Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
-import datetime
 
 import binascii
 from sqlalchemy import and_
 
 from app import db
-from app.models import Tags
+from app.datamgmt.manage.manage_tags_db import add_db_tag
+from app.models.authorization import User
 from app.models.cases import CaseProtagonist
-from app.models.cases import CaseTags
 from app.models.cases import Cases
 from app.models.models import CaseTemplateReport, ReviewStatus
 from app.models.models import Client
 from app.models.models import Languages
 from app.models.models import ReportType
-from app.models.authorization import User
 
 
 def get_case_summary(caseid):
@@ -43,13 +39,15 @@ def get_case_summary(caseid):
         User.name.label('user'),
         Client.name.label('customer')
     ).join(
-        Cases.user, Cases.client
+        Cases.user
+    ).join(
+        Cases.client
     ).first()
 
     return case_summary
 
 
-def get_case(caseid):
+def get_case(caseid) -> Cases:
     return Cases.query.filter(Cases.case_id == caseid).first()
 
 
@@ -111,11 +109,11 @@ def get_case_report_template():
         CaseTemplateReport.name,
         Languages.name,
         CaseTemplateReport.description
-    ).join(
-        CaseTemplateReport.language,
-        CaseTemplateReport.report_type
-    ).filter(
+    ).filter(and_(
+        Languages.id == CaseTemplateReport.report_type_id,
         ReportType.name == "Investigation"
+    )).join(
+        CaseTemplateReport.report_type
     ).all()
 
     return reports
@@ -130,11 +128,7 @@ def save_case_tags(tags, case):
     for tag in tags.split(','):
         tag = tag.strip()
         if tag:
-            tg = Tags.query.filter_by(tag_title=tag).first()
-
-            if tg is None:
-                tg = Tags(tag_title=tag)
-                tg.save()
+            tg = add_db_tag(tag)
 
             case.tags.append(tg)
 
@@ -156,12 +150,10 @@ def get_activities_report_template():
         CaseTemplateReport.name,
         Languages.name,
         CaseTemplateReport.description
-    ).join(
-        CaseTemplateReport.language,
-        CaseTemplateReport.report_type
-    ).filter(
-        ReportType.name == "Activities"
-    ).all()
+    ).filter(and_(
+        ReportType.name == "Activities",
+        Languages.id == CaseTemplateReport.language_id
+    )).all()
 
     return reports
 

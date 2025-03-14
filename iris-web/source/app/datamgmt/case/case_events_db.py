@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-#
 #  IRIS Source Code
 #  Copyright (C) 2021 - Airbus CyberSecurity (SAS)
 #  ir@cyberactionlab.net
@@ -58,9 +56,11 @@ def get_case_events_assets_graph(caseid):
         CaseEventsAssets.case_id == caseid,
         CasesEvent.event_in_graph == True
     )).join(
-        CaseEventsAssets.event,
-        CaseEventsAssets.asset,
-        CaseAssets.asset_type,
+        CaseEventsAssets.event
+    ).join(
+        CaseEventsAssets.asset
+    ).join(
+        CaseAssets.asset_type
     ).all()
 
     return events
@@ -80,9 +80,11 @@ def get_case_events_ioc_graph(caseid):
         CaseEventsIoc.case_id == caseid,
         CasesEvent.event_in_graph == True
     )).join(
-        CaseEventsIoc.event,
-        CaseEventsIoc.ioc,
-        Ioc.ioc_type,
+        CaseEventsIoc.event
+    ).join(
+        CaseEventsIoc.ioc
+    ).join(
+        Ioc.ioc_type
     ).all()
 
     return events
@@ -149,7 +151,8 @@ def get_case_event_comment(event_id, comment_id, caseid):
         User.name,
         User.user
     ).join(
-        EventComments.comment,
+        EventComments.comment
+    ).join(
         Comments.user
     ).first()
 

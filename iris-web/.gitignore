@@ -7,13 +7,17 @@ source/app/build
 yarn.lock
 yarn-error.log
 *.psd
+env/
+venv/
 test/
 source/app/config.priv.ini
 source/app/config.test.ini
 .idea/
 libesedb-*/
 orcparser/
+venv1/
 .DS_Store
+.venv/
 .vscode/
 *.code-workspace
 nohup.out
@@ -23,3 +27,5 @@ source/app/static/assets/dist/
 source/app/static/assets/img/graph/*
 !source/app/static/assets/img/graph/*.png
 run_nv_test.py
+certificates/web_certificates/*.pem
+!certificates/web_certificates/iris_dev_*

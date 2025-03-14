@@ -7,7 +7,7 @@ import countries from "../components/Countries.jsx";
 import {
 	Box,
 	Paper,
-  Typography,
+    Typography,
 	Divider,
 	Button,
 	Grid,
@@ -19,6 +19,11 @@ import {
 	DialogTitle,
 	DialogContent,
 	TextField,
+  	InputAdornment,
+	IconButton,
+    Chip,
+	Checkbox,
+	Tooltip, 
 } from "@mui/material";
 
 import { useNavigate, Link } from "react-router-dom";
@@ -27,14 +32,18 @@ import { toast } from "react-toastify"
 
 import {
   Cached as CachedIcon,
+  ContentCopy as ContentCopyIcon,
+  Draw as DrawIcon, 
+  Close as CloseIcon,
 } from "@mui/icons-material";
 
 //import { useAlert 
 import { typecost, typecost_single, } from "../views/HandlePaymentNew.jsx";
 import BillingStats from "../components/BillingStats.jsx";
+import { handlePayasyougo } from "../views/HandlePaymentNew.jsx"
 
 const Billing = (props) => {
-  const { globalUrl, userdata, serverside, billingInfo, stripeKey, selectedOrganization, handleGetOrg, } = props;
+  const { globalUrl, userdata, serverside, billingInfo, stripeKey, selectedOrganization, handleGetOrg, clickedFromOrgTab } = props;
   //const alert = useAlert();
   let navigate = useNavigate();
 
@@ -111,10 +120,11 @@ const Billing = (props) => {
 		minHeight: 280,
 		maxWidth: 400,
 		width: "100%",
-		backgroundColor: theme.palette.surfaceColor,
-		borderRadius: theme.palette.borderRadius,
+		backgroundColor: theme.palette.platformColor,
+		borderRadius: theme.palette.borderRadius*2,
 		border: "1px solid rgba(255,255,255,0.3)",
 		marginRight: 10, 
+		marginTop: 15,
 	}
 
   const isCloud =
@@ -228,10 +238,45 @@ const Billing = (props) => {
       });
   };
 
-	const SubscriptionObject = (props) => {
-  		const { globalUrl, userdata, serverside, billingInfo, stripeKey, selectedOrganization, handleGetOrg, subscription, highlight, } = props;
+	const sendSignatureRequest = (subscription) => {
+		const url = `${globalUrl}/api/v1/orgs/${selectedOrganization.id}`;
 
-		var top_text = "Base Access"
+		fetch(url, {
+			body: JSON.stringify({
+				org_id: selectedOrganization.id,
+				subscription: subscription,
+			}),
+		    mode: "cors",
+		    method: "POST",
+		    credentials: "include",
+		    crossDomain: true,
+		    withCredentials: true,
+		    headers: {
+		      "Content-Type": "application/json; charset=utf-8",
+		    },
+		})
+		.then((response) => {
+			if (response.status !== 200) {
+				console.log("Error in response");
+			}
+			return response.json();
+		})
+		.then((responseJson) => {
+			console.log("Response from signature request: ", responseJson);
+		})
+		.catch((error) => {
+			console.log("Error: ", error);
+		})
+	}
+
+	const SubscriptionObject = (props) => {
+  		const { globalUrl, index, userdata, serverside, billingInfo, stripeKey, selectedOrganization, handleGetOrg, subscription, highlight, } = props;
+
+  		const [signatureOpen, setSignatureOpen] = React.useState(false);
+  		const [tosChecked, setTosChecked] = React.useState(subscription.eula_signed)
+		const [hovered, setHovered] = React.useState(false)
+
+		var top_text = "Base Cloud Access"
 		if (subscription.limit === undefined && subscription.level === undefined || subscription.level === null || subscription.level === 0) {
 			subscription.name = "Enterprise"
 			subscription.currency_text = "$"
@@ -278,12 +323,153 @@ const Billing = (props) => {
 			newPaperstyle.border = "1px solid #f85a3e"
 		}
 
+		if (hovered) {
+			newPaperstyle.backgroundColor = theme.palette.surfaceColor
+		}
+
 		return (
-			<Paper style={newPaperstyle}>
+			<Paper 
+				style={newPaperstyle}
+				onMouseEnter={() => setHovered(true)}
+				onMouseLeave={() => setHovered(false)}
+			>
+				<Dialog
+					open={signatureOpen}
+					PaperProps={{
+					  style: {
+						pointerEvents: "auto",
+						color: "white",
+						minWidth: 750,
+						padding: 30,
+						maxHeight: 700,
+						overflowY: "auto",
+						overflowX: "hidden",
+						zIndex: 10012,
+						border: theme.palette.defaultBorder,
+					  },
+					}}
+				>
+					<Tooltip
+					  title="Close window"
+					  placement="top"
+					  style={{ zIndex: 10011 }}
+					>
+					  <IconButton
+						style={{ zIndex: 5000, position: "absolute", top: 34, right: 34 }}
+						onClick={(e) => {
+						  e.preventDefault();
+						  setSignatureOpen(false);
+						  setTosChecked(false)
+						}}
+					  >
+						<CloseIcon style={{ color: "white" }} />
+					  </IconButton>
+					</Tooltip>
+					<DialogTitle id="form-dialog-title">Read and Accept the EULA</DialogTitle>
+					<DialogContent>
+						<TextField
+							rows={17}
+							multiline
+							fullWidth
+						    InputProps={{
+						      readOnly: true,
+							  style: {
+								fontSize: 14, 
+							    color: "rgba(255, 255, 255, 0.6)",
+							  }
+						    }}
+							value={subscription.eula}
+						/>
+						<Checkbox
+							disabled={subscription.eula_signed}
+							checked={tosChecked}
+							onChange={(e) => {
+								setTosChecked(e.target.checked)
+							}}
+							inputProps={{ 'aria-label': 'primary checkbox' }}
+						/>
+						<Typography variant="body1" style={{display: "inline-block", marginLeft: 10, marginTop: 25, cursor: "pointer", }} onClick={() => {
+							setTosChecked(!tosChecked)
+						}}>
+							Accept
+						</Typography>
+						<Typography variant="body2" style={{display: "inline-block", marginLeft: 10, }} color="textSecondary">
+							By clicking the “accept” button, you are signing the document, electronically agreeing that it has the same legal validity and effects as a handwritten signature, and that you have the competent authority to represent and sign on behalf an entity. Need support or have questions? Contact us at support@shuffler.io.
+						</Typography>
+
+						<div style={{display: "flex", marginTop: 25, }}>
+							<Button
+								variant="contained"
+								color="primary"
+								style={{ marginLeft: "auto", }}
+								disabled={!tosChecked || subscription.eula_signed}
+								onClick={() => {
+									setSignatureOpen(false)		
+									subscription.eula_signed = true
+									sendSignatureRequest(subscription)
+								}}
+
+							>
+								Submit	
+							</Button>
+						</div>
+					</DialogContent>
+				</Dialog>
 				<div style={{display: "flex"}}>
-					<Typography variant="h6" style={{ marginTop: 10, marginBottom: 10 }}>
+					{top_text === "Base Cloud Access" && userdata.has_card_available === true ?
+						<Chip
+							style={{
+								  backgroundColor: "#f86a3e",
+								  paddingLeft: 5,
+								  paddingRight: 5,
+								  height: 28,
+								  cursor: "pointer",
+								  borderColor: "#3d3f43",
+								  color: "white",
+								  marginTop: 10, 
+								  marginRight: 30,
+								  border: "1px solid rgba(255,255,255,0.3)",
+							}}
+							label={"Unlimited"}
+							onClick={() => {
+								console.log("Clicked chip")
+							}}
+							variant="outlined"
+							color="primary"
+						  />
+						: null}
+					<Typography variant="h6" style={{ marginTop: 10, marginBottom: 10, flex: 5, }}>
 						{top_text}
 					</Typography>
+
+					{top_text === "Base Cloud Access" && userdata.has_card_available === false ?
+						<img 
+							src="/images/stripenew.png" 
+							style={{
+								margin: "auto",
+								width: 100, 
+								backgroundColor: "white", 
+								borderRadius: theme.palette.borderRadius,
+							}}
+						/>
+					: null}
+					{isCloud && highlight === true && top_text !== "Base Cloud Access" ?
+						<Tooltip
+						  title="Sign EULA"
+						  placement="top"
+						  style={{ zIndex: 10011 }}
+						>
+							<IconButton 
+								disabled={subscription.eula_signed}
+								style={{ marginLeft: "auto", marginTop: 10, marginBottom: 10, flex: 1, }} 
+								onClick={() => {
+									setSignatureOpen(true)
+								}}
+							>
+								<DrawIcon /> 
+							</IconButton>
+						</Tooltip>
+					: null}
 				</div>
 				<Divider />	
 					<div>
@@ -320,15 +506,61 @@ const Billing = (props) => {
 										</a>
 								}
 
-								if (feature.includes("Licensed Worker: ")) {
+								if (feature.includes("Worker License: ")) {
+									const fieldId = "webhook_uri_field_"+index
 									parsedFeature =
-										<a
-											href={feature.split("Licensed Worker: ")[1]}
-											target="_blank"
-											style={{ textDecoration: "none", color: "#f85a3e",}}
-										>
-											Download the licensed worker
-										</a>
+										<span style={{marginTop: 10, }}>
+											<Typography
+												variant="body2"
+											>
+												Use the {feature.split("Worker License: ")[0]} Worker
+											</Typography>
+											<TextField
+												value={feature.split("Worker License: ")[1]}
+                								style={{
+                								  backgroundColor: theme.palette.inputColor,
+                								  borderRadius: theme.palette.borderRadius,
+                								}}
+                								id={fieldId}
+                								onClick={() => {}}
+                								InputProps={{
+                								  endAdornment:
+                								    <InputAdornment position="end">
+                								      <IconButton
+                								        aria-label="Copy webhook"
+                								        onClick={() => {
+                								          var copyText = document.getElementById(fieldId);
+                								          if (copyText !== undefined && copyText !== null) {
+                								            console.log("NAVIGATOR: ", navigator);
+                								            const clipboard = navigator.clipboard;
+                								            if (clipboard === undefined) {
+                								              toast("Can only copy over HTTPS (port 3443)");
+                								              return;
+                								            }
+
+                								            navigator.clipboard.writeText(copyText.value);
+                								            copyText.select();
+                								            copyText.setSelectionRange(
+                								              0,
+                								              99999
+                								            ); /* For mobile devices */
+
+                								            /* Copy the text inside the text field */
+                								            document.execCommand("copy");
+                								            toast("Copied Webhook URL");
+                								          } else {
+                								            console.log("Couldn't find webhook URI field: ", copyText);
+                								          }
+                								        }}
+                								        edge="end"
+                								      >
+                								        <ContentCopyIcon />
+                								      </IconButton>
+                								    </InputAdornment>
+                								}}
+												fullWidth
+											/>
+										</span>
 								}
 
 								return (
@@ -342,29 +574,89 @@ const Billing = (props) => {
 							: null}
 						</ul>
 					</div>
-					{(highlight === true && subscription.name === "Pay as you go" && subscription.limit <= 10000) || subscription.name.includes("Scale") ?
+					{isCloud && (highlight === true && (subscription.name === "Pay as you go" && subscription.limit <= 10000) || subscription.name === "Open Source") ?
 						<span>
 							<Typography variant="body2" color="textSecondary" style={{ marginTop: 20, marginBottom: 10 }}>
 								{subscription.name.includes("Scale") ? 
 									"" 
 									: 
-									"You are not subscribed to any plan and are using the free plan with max 10,000 app runs per month. Upgrade to deactivate this limit."
+
+									userdata.has_card_available === true ?
+										"While you have a card attached to your account, Shuffle will no longer prevent workflows from running. Billing will occur at the start of each month."
+										:
+										`You are not subscribed to any plan and are using the free plan with max 10,000 app runs per month. Upgrade to deactivate this limit.`
 								}
 							</Typography>
+							Billing email: {selectedOrganization.org}
+							{/*isCloud ? 
+								<Button 
+									variant="contained" 
+									color="primary" 
+									style={{ marginTop: 20, marginBottom: 10, }}
+									onClick={() => {
+										window.open("https://checkout.stripe.com/c/pay/ppage_1O8UttDzMUgUjxHSBh3krC6Y#fidkdWxOYHwnPyd1blpxYHZxWkBhfWJOY3RoVEJdXDBPSW9hR3RxcG1GcjU1R01nbE5PQUcnKSdobGF2Jz9%2BJ2JwbGEnPydjY2M3MjA0NyhnYzcyKDFkMTQoPWFmPSgwYDI9MTA0NGAyZDNhPWZhNmcnKSdocGxhJz8nNWYwMjNnZGMoZGdgPCgxPDxhKD1kNjUoMjZmPTcxYzw9NjBjYzZmMGRnJykndmxhJz8nZGYxYWZhY2MoZ2FjNygxPDA2KDxhZ2MoZjY1PWM8NGcxYzUxMjJkYTRmJ3gpJ2dgcWR2Jz9eWCknaWR8anBxUXx1YCc%2FJ3Zsa2JpYFpscWBoJyknd2BjYHd3YHdKd2xibGsnPydtcXF1PyoqaWpmZGltanZxPzY1NTcnKSdpamZkaWAnP2twaWl4JSUl")
+									}}
+								>
+									Add Payment Method
+								</Button>
+							: null*/}
+
 							<Button 
-								variant="contained" 
+								fullWidth 
+								disabled={false} 
+								variant="outlined" 
 								color="primary" 
-								style={{ marginTop: 20, marginBottom: 10, }}
+								style={{
+									marginTop: 10, 
+									borderRadius: 25, 
+									height: 40, 
+									fontSize: 14, 
+									color: "white",
+									backgroundImage: userdata.has_card_available ? null : "linear-gradient(to right, #f86a3e, #f34079)",
+
+								}}
 								onClick={() => {
 									if (isCloud) {
-										navigate("/pricing?tab=cloud&highlight=true")
+										handlePayasyougo(userdata)
+										//navigate("/pricing?tab=cloud&highlight=true")
 									} else {
-										window.open("https://shuffler.io/pricing?tab=onprem&highlight=true", "_blank")
+										//window.open("https://shuffler.io/pricing?tab=onprem&highlight=true", "_blank")
+										handlePayasyougo()
 									}
 								}}
 							>
-								Upgrade Now	
+								{userdata.has_card_available === true ?
+									"Manage Card Details" 
+									:
+									"Add Card Details"
+								}
 							</Button>
+							{userdata.has_card_available === true ?
+								<Button 
+									fullWidth 
+									disabled={false} 
+									variant="outlined" 
+									color="primary" 
+									style={{
+										marginTop: 10, 
+										borderRadius: 25, 
+										height: 40, 
+										fontSize: 14, 
+										color: "white",
+										backgroundImage: "linear-gradient(to right, #f86a3e, #f34079)",
+									}}
+									onClick={() => {
+										if (isCloud) {
+											navigate("/pricing?tab=cloud&highlight=true")
+										} else {
+											window.open("https://shuffler.io/pricing?tab=onprem&highlight=true", "_blank")
+										}
+									}}
+								>
+									Upgrade plan
+								</Button>
+							: null}
+								
 						</span>
 					: null}
 				{showSupport ? 
@@ -676,22 +968,65 @@ const Billing = (props) => {
       });
   };
 
+	const isChildOrg = userdata.active_org.creator_org !== "" && userdata.active_org.creator_org !== undefined && userdata.active_org.creator_org !== null
 	return (
-		<div>
+		<div style={{ width: clickedFromOrgTab? 1030 : "auto", padding: 27, backgroundColor: '#212121', borderRadius: '16px', }}>
       		{addDealModal}
-			<Typography variant="h6" style={{ marginTop: 20, marginBottom: 10 }}>
-				Billing	
-			</Typography>
+			{clickedFromOrgTab?
+			  <h2 style={{ marginBottom: 8, marginTop: 0, color: "#ffffff" }}>Billing & Licensing</h2>:
+			<Typography variant="h4" style={{ marginTop: 20, marginBottom: 10 }}>
+				Billing	& Licensing
+			</Typography>}
+			{clickedFromOrgTab?
+			<span style={{ color: "#9E9E9E" }}>{isCloud ? 
+				"Get more out of Shuffle by adding your credit card, such as no App Run limitations, and priority support from our team. We use Stripe to manage subscriptions and do not store any of your billing information. You can manage your subscription and billing information below."
+				:
+				"Shuffle is an Open Source automation platform, and no license is required. We do however offer a Scale license with HA guarantees, along with support hours. By buying a license on https://shuffler.io, you can get access to the license immediately, and if Cloud Syncronisation is enabled, the UI in your local instance will also update."
+			}</span>:
 			<Typography variant="body1" color="textSecondary" style={{ marginTop: 0, marginBottom: 10}}>
 				{isCloud ? 
-					"We use Stripe to manage subscriptions and do not store any of your billing information. You can manage your subscription and billing information below."
+					"Get more out of Shuffle by adding your credit card, such as no App Run limitations, and priority support from our team. We use Stripe to manage subscriptions and do not store any of your billing information. You can manage your subscription and billing information below."
 					:
-					"Shuffle is an Open Source automation platform, and no license is required to use it. You may however activate Cloud Sync, get our Scale license, get help with Kubernetes, or talk to Shuffle's Support team to get automation help."
+					"Shuffle is an Open Source automation platform, and no license is required. We do however offer a Scale license with HA guarantees, along with support hours. By buying a license on https://shuffler.io, you can get access to the license immediately, and if Cloud Syncronisation is enabled, the UI in your local instance will also update."
 				}
-			</Typography>
+			</Typography>}
+
+			{userdata.support === true ? 
+				<div style={{marginBottom: 10, marginTop:clickedFromOrgTab?16:null, color:clickedFromOrgTab?"#F1F1F1":null }}>
+					For sales: Create&nbsp;
+					<a href={"https://docs.google.com/document/d/1OeJSi42812EMg7fUAw1HAj1ymOG8rfp8Ma_DGJKvwgI/copy?usp=sharing&organization=" + selectedOrganization.id} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none", color: "#f85a3e" }}>
+						New Cloud Contract
+					</a>
+					&nbsp;or&nbsp;
+					<a href={"https://docs.google.com/document/d/1IguxpeV4Wwwr9C0MPyUNhhajEu_PxjRfP7f0hYyRYOI/copy?usp=sharing&organization=" + selectedOrganization.id} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none", color: "#f85a3e" }}>
+						New Onprem Contract
+					</a>
+					&nbsp; - &nbsp; 
+					<a href={"https://drive.google.com/drive/folders/1zVvwwkbQXW3p-DJYa0GBDzFo_ZnV_I_5"} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none", color: "#f85a3e" }}>
+						Google Drive Link
+					</a>
+					&nbsp; - &nbsp;
+					<a href={"https://github.com/Shuffle/Shuffle-docs/tree/master/handbook/Sales"} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none", color: "#f85a3e" }}>
+						Sales Process
+					</a>
+
+						
+				</div>
+				:
+				null
+			}
+
+
+				{isChildOrg ?
+					<Typography variant="h6" style={{marginBottom: 50, }}>
+						Billing is handled by your parent organisation. Reach out to support@shuffler.io if you have questions about this.
+					</Typography>
+				: null}
+
 			<div style={{display: "flex", maxWidth: 768, minWidth: 768, }}>
-				{isCloud && billingInfo.subscription !== undefined && billingInfo.subscription !== null  ?
+				{isCloud && billingInfo.subscription !== undefined && billingInfo.subscription !== null ? isChildOrg ?  null : 
 					<SubscriptionObject
+						index={0}
 						globalUrl={globalUrl}
 						userdata={userdata}
 						serverside={serverside}
@@ -704,6 +1039,7 @@ const Billing = (props) => {
 				: !isCloud ? 
 					<span style={{display: "flex", }}>
 						<SubscriptionObject
+							index={0}
 							globalUrl={globalUrl}
 							userdata={userdata}
 							serverside={false}
@@ -722,6 +1058,7 @@ const Billing = (props) => {
 							highlight={true}
 						/>
 						<SubscriptionObject
+							index={1}
 							globalUrl={globalUrl}
 							userdata={userdata}
 							serverside={false}
@@ -741,16 +1078,18 @@ const Billing = (props) => {
 						/>
 					</span>
 				: null}
+
 				{isCloud &&
 					selectedOrganization.subscriptions !== undefined &&
 					selectedOrganization.subscriptions !== null &&
-					selectedOrganization.subscriptions.length > 0 ? 
-
+					selectedOrganization.subscriptions.length > 0 &&
+					!isChildOrg ? 
 						selectedOrganization.subscriptions
 							.reverse()
 							.map((sub, index) => {
 								return (
 									<SubscriptionObject
+										index={index+1}
 										globalUrl={globalUrl}
 										userdata={userdata}
 										serverside={serverside}
@@ -758,6 +1097,7 @@ const Billing = (props) => {
 										stripeKey={stripeKey}
 										selectedOrganization={selectedOrganization}
 										subscription={sub}
+										highlight={true}
 									/>
 								)
 							})
@@ -806,7 +1146,9 @@ const Billing = (props) => {
 									</Grid>
 									*/}
 					</div>
-					{isCloud &&
+
+
+					{/*isCloud &&
 						selectedOrganization.partner_info !== undefined &&
 						selectedOrganization.partner_info.reseller === true ? (
               <div style={{ marginTop: 30, marginBottom: 200 }}>
@@ -990,16 +1332,18 @@ const Billing = (props) => {
                 />              
 
 			  </div>
-            ) : null}
-			<div style={{ marginTop: 30, }}>
+            ) : null*/}
+			<div style={{ marginTop: 100, }}>
 				<Typography
 				  style={{ marginTop: 40, marginLeft: 10, marginBottom: 5 }}
-				  variant="h6"
+				  variant="h4"
 				>
-					Shuffle Utilization 
+					Utilization & Stats 
 				</Typography>
 			  </div>
 			  <BillingStats
+				isCloud={isCloud}
+				clickedFromOrgTab={clickedFromOrgTab}
 				globalUrl={globalUrl}
 				selectedOrganization={selectedOrganization}	
 				userdata={userdata}

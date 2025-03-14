@@ -3,49 +3,29 @@
 source /rest_client.sh
 source /utilities.sh
 
-[ -z "$ADMIN_EMAIL" ] && ADMIN_EMAIL="admin@admin.test"
-[ -z "$GPG_PASSPHRASE" ] && GPG_PASSPHRASE="passphrase"
-[ -z "$REDIS_FQDN" ] && REDIS_FQDN="redis"
-[ -z "$MISP_MODULES_FQDN" ] && MISP_MODULES_FQDN="http://misp-modules"
+MYSQLCMD="mysql -u $MYSQL_USER -p$MYSQL_PASSWORD -P $MYSQL_PORT -h $MYSQL_HOST -r -N $MYSQL_DATABASE"
 
-# Switches to selectively disable configuration logic
-[ -z "$AUTOCONF_GPG" ] && AUTOCONF_GPG="true"
-[ -z "$AUTOCONF_ADMIN_KEY" ] && AUTOCONF_ADMIN_KEY="true"
-[ -z "$OIDC_ENABLE" ] && OIDC_ENABLE="false"
-[ -z "$LDAP_ENABLE" ] && LDAP_ENABLE="false"
+# We now use envsubst for safe variable substitution with pseudo-json objects for env var enforcement
+# envsubst won't evaluate anything like $() or conditional variable expansion so lets do that here
+export PYTHON_BIN="$(which python3)"
+export GPG_BINARY="$(which gpg)"
+export SETTING_CONTACT="${MISP_CONTACT-$ADMIN_EMAIL}"
+export SETTING_EMAIL="${MISP_EMAIL-$ADMIN_EMAIL}"
 
-init_configuration(){
-    # Note that we are doing this after enforcing permissions, so we need to use the www-data user for this
-    echo "... configuring default settings"
-    sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q "MISP.baseurl" "$BASE_URL"
-    sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q "MISP.email" "${MISP_EMAIL-$ADMIN_EMAIL}"
-    sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q "MISP.contact" "${MISP_CONTACT-$ADMIN_EMAIL}"
-    sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q "MISP.redis_host" "$REDIS_FQDN"
-    sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q "MISP.python_bin" $(which python3)
-    sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q -f "MISP.ca_path" "/etc/ssl/certs/ca-certificates.crt"
-    sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q "Plugin.ZeroMQ_redis_host" "$REDIS_FQDN"
-    sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q "Plugin.ZeroMQ_enable" true
-    sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q "Plugin.Enrichment_services_enable" true
-    sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q "Plugin.Enrichment_services_url" "$MISP_MODULES_FQDN"
-    sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q "Plugin.Import_services_enable" true
-    sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q "Plugin.Import_services_url" "$MISP_MODULES_FQDN"
-    sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q "Plugin.Export_services_enable" true
-    sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q "Plugin.Export_services_url" "$MISP_MODULES_FQDN"
-    sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q "Plugin.Cortex_services_enable" false
+init_minimum_config() {
+    # Temporarily disable DB to apply config file settings, reenable after if needed 
+    sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q "MISP.system_setting_db" false
+    init_settings "minimum_config"
 }
 
-init_workers(){
-    # Note that we are doing this after enforcing permissions, so we need to use the www-data user for this
-    echo "... configuring background workers"
-    sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q "SimpleBackgroundJobs.enabled" true
-    sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q "SimpleBackgroundJobs.supervisor_host" "127.0.0.1"
-    sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q "SimpleBackgroundJobs.supervisor_port" 9001
-    sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q "SimpleBackgroundJobs.supervisor_password" "supervisor"
-    sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q "SimpleBackgroundJobs.supervisor_user" "supervisor"
-    sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q "SimpleBackgroundJobs.redis_host" "$REDIS_FQDN"
+init_configuration() {
+    init_settings "db_enable"
+    init_settings "initialisation"
+}
 
+init_workers() {
     echo "... starting background workers"
-    supervisorctl start misp-workers:*
+    stdbuf -oL supervisorctl start misp-workers:*
 }
 
 configure_gnupg() {
@@ -54,7 +34,7 @@ configure_gnupg() {
         return
     fi
 
-    GPG_DIR=/var/www/MISP/.gnupg
+    export GPG_DIR=/var/www/MISP/.gnupg
     GPG_ASC=/var/www/MISP/app/webroot/gpg.asc
     GPG_TMP=/tmp/gpg.tmp
 
@@ -90,10 +70,7 @@ GPGEOF
         echo "... found exported key ${GPG_ASC}"
     fi
 
-    sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q "GnuPG.email" "${MISP_EMAIL-$ADMIN_EMAIL}"
-    sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q "GnuPG.homedir" "${GPG_DIR}"
-    sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q "GnuPG.password" "${GPG_PASSPHRASE}"
-    sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q "GnuPG.binary" "$(which gpg)"
+    init_settings "gpg"
 }
 
 set_up_oidc() {
@@ -102,7 +79,12 @@ set_up_oidc() {
         return
     fi
 
+    if [[ -z "$OIDC_ROLES_MAPPING" ]]; then
+        OIDC_ROLES_MAPPING="\"\""
+    fi
+
     # Check required variables
+    # OIDC_ISSUER may be empty
     check_env_vars OIDC_PROVIDER_URL OIDC_CLIENT_ID OIDC_CLIENT_SECRET OIDC_ROLES_PROPERTY OIDC_ROLES_MAPPING OIDC_DEFAULT_ORG
 
     sudo -u www-data php /var/www/MISP/tests/modify_config.php modify "{
@@ -114,6 +96,7 @@ set_up_oidc() {
     sudo -u www-data php /var/www/MISP/tests/modify_config.php modify "{
         \"OidcAuth\": {
             \"provider_url\": \"${OIDC_PROVIDER_URL}\",
+            ${OIDC_ISSUER:+\"issuer\": \"${OIDC_ISSUER}\",}
             \"client_id\": \"${OIDC_CLIENT_ID}\",
             \"client_secret\": \"${OIDC_CLIENT_SECRET}\",
             \"roles_property\": \"${OIDC_ROLES_PROPERTY}\",
@@ -155,23 +138,82 @@ set_up_ldap() {
             \"ldapEmailField\": ${LDAP_EMAIL_FIELD}
         }
     }" > /dev/null
+
+    # Disable password confirmation as stated at https://github.com/MISP/MISP/issues/8116
+    sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q "Security.require_password_confirmation" false
+}
+
+set_up_aad() {
+    if [[ "$AAD_ENABLE" != "true" ]]; then
+        echo "... Entra (AzureAD) authentication disabled"
+        return
+    fi
+
+    # Check required variables
+    check_env_vars AAD_CLIENT_ID AAD_TENANT_ID AAD_CLIENT_SECRET AAD_REDIRECT_URI AAD_PROVIDER AAD_PROVIDER_USER AAD_MISP_ORGADMIN AAD_MISP_SITEADMIN AAD_CHECK_GROUPS
+
+    # Note: Not necessary to edit bootstrap.php to load AadAuth Cake plugin because 
+    # existing loadAll() call in bootstrap.php already loads all available Cake plugins
+
+    # Set auth mechanism to AAD in config.php file
+    sudo -u www-data php /var/www/MISP/tests/modify_config.php modify "{
+        \"Security\": {
+            \"auth\": [\"AadAuth.AadAuthenticate\"]
+        }
+    }" > /dev/null
+
+    # Configure AAD auth settings from environment variables in config.php file
+    sudo -u www-data php /var/www/MISP/tests/modify_config.php modify "{
+        \"AadAuth\": {
+            \"client_id\": \"${AAD_CLIENT_ID}\",
+            \"ad_tenant\": \"${AAD_TENANT_ID}\",
+            \"client_secret\": \"${AAD_CLIENT_SECRET}\",
+            \"redirect_uri\": \"${AAD_REDIRECT_URI}\",
+            \"auth_provider\": \"${AAD_PROVIDER}\",
+            \"auth_provider_user\": \"${AAD_PROVIDER_USER}\",
+            \"misp_user\": \"${AAD_MISP_USER}\",
+            \"misp_orgadmin\": \"${AAD_MISP_ORGADMIN}\",
+            \"misp_siteadmin\": \"${AAD_MISP_SITEADMIN}\",
+            \"check_ad_groups\": ${AAD_CHECK_GROUPS}
+        }
+    }" > /dev/null
+
+    # Disable self-management, username change, and password change to prevent users from circumventing AAD login flow
+    # Recommended per https://github.com/MISP/MISP/blob/2.4/app/Plugin/AadAuth/README.md
+    sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q "MISP.disableUserSelfManagement" true
+    sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q "MISP.disable_user_login_change" true
+    sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q "MISP.disable_user_password_change" true
+
+    # Disable password confirmation as stated at https://github.com/MISP/MISP/issues/8116
+    sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q "Security.require_password_confirmation" false
+}
+
+set_up_proxy() {
+    if [[ "$PROXY_ENABLE" == "true" ]]; then
+        echo "... configuring proxy settings"
+        init_settings "proxy"
+    else
+        echo "... Proxy disabled"
+    fi
 }
 
 apply_updates() {
-    # Disable weird default
-    sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q "Plugin.ZeroMQ_enable" false
+    # Disable 'ZeroMQ_enable' to get better logs when applying updates
+#    sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q "Plugin.ZeroMQ_enable" false
     # Run updates (strip colors since output might end up in a log)
-    sudo -u www-data /var/www/MISP/app/Console/cake Admin runUpdates | sed -r "s/[[:cntrl:]]\[[0-9]{1,3}m//g"
+    sudo -u www-data /var/www/MISP/app/Console/cake Admin runUpdates | stdbuf -oL sed -r "s/[[:cntrl:]]\[[0-9]{1,3}m//g"
+    # Re-enable 'ZeroMQ_enable'
+#    sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q "Plugin.ZeroMQ_enable" true
 }
 
 init_user() {
     # Create the main user if it is not there already
-    sudo -u www-data /var/www/MISP/app/Console/cake userInit -q 2>&1 > /dev/null
+    sudo -u www-data /var/www/MISP/app/Console/cake user init -q > /dev/null 2>&1
 
-    echo "UPDATE misp.users SET email = \"${ADMIN_EMAIL}\" WHERE id = 1;" | ${MYSQLCMD}
+    echo "UPDATE $MYSQL_DATABASE.users SET email = \"${ADMIN_EMAIL}\" WHERE id = 1;" | ${MYSQLCMD}
 
     if [ ! -z "$ADMIN_ORG" ]; then
-        echo "UPDATE misp.organisations SET name = \"${ADMIN_ORG}\" where id = 1;" | ${MYSQLCMD}
+        echo "UPDATE $MYSQL_DATABASE.organisations SET name = \"${ADMIN_ORG}\" where id = 1;" | ${MYSQLCMD}
     fi
 
     if [ -n "$ADMIN_KEY" ]; then
@@ -192,7 +234,7 @@ init_user() {
     if [ ! -z "$ADMIN_PASSWORD" ]; then
         echo "... setting admin password to '${ADMIN_PASSWORD}'"
         PASSWORD_POLICY=$(sudo -u www-data /var/www/MISP/app/Console/cake Admin getSetting "Security.password_policy_complexity" | jq ".value" -r)
-        PASSWORD_LENGTH=$(sudo -u www-data /var/www/MISP/app/Console/cake Admin getSetting "Security.password_policy_length" | jq ".value")
+        PASSWORD_LENGTH=$(sudo -u www-data /var/www/MISP/app/Console/cake Admin getSetting "Security.password_policy_length" | jq ".value" -r)
         sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q "Security.password_policy_length" 1
         sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q "Security.password_policy_complexity" '/.*/'
         sudo -u www-data /var/www/MISP/app/Console/cake User change_pw "${ADMIN_EMAIL}" "${ADMIN_PASSWORD}"
@@ -201,44 +243,111 @@ init_user() {
     else
         echo "... setting admin password skipped"
     fi
-    echo 'UPDATE misp.users SET change_pw = 0 WHERE id = 1;' | ${MYSQLCMD}
+    echo "UPDATE $MYSQL_DATABASE.users SET change_pw = 0 WHERE id = 1;" | ${MYSQLCMD}
 }
 
 apply_critical_fixes() {
-    sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q "MISP.external_baseurl" "${BASE_URL}"
-    sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q "MISP.host_org_id" 1
-    sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q "Plugin.Action_services_enable" false
-    sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q "Plugin.Enrichment_hover_enable" false
-    sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q "Plugin.Enrichment_hover_popover_only" false
-    sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q "Security.csp_enforce" true
-    sudo -u www-data php /var/www/MISP/tests/modify_config.php modify "{
-        \"Security\": {
-            \"rest_client_baseurl\": \"${BASE_URL}\"
-        }
-    }" > /dev/null
-    sudo -u www-data php /var/www/MISP/tests/modify_config.php modify "{
-        \"Security\": {
-            \"auth\": \"\"
-        }
-    }" > /dev/null
-    # Avoids displaying errors not relevant to a docker container
-    sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q "MISP.self_update" false
+    init_settings "critical"
+
+    # Kludge for handling Security.auth array.  Unrecognised by tools like cake admin setsetting.
+    local config_json=$(echo '<?php require_once "/var/www/MISP/app/Config/config.php"; echo json_encode($config, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>'|/usr/bin/php)
+    if $(echo $config_json |jq -e 'getpath(("Security.auth" | split("."))) == null'); then
+        echo "Updating unset critical setting 'Security.auth' to 'Array()'..."
+        sudo -u www-data php /var/www/MISP/tests/modify_config.php modify "{
+            \"Security\": {
+                \"auth\": {}
+            }
+        }" > /dev/null
+    fi
 }
 
 apply_optional_fixes() {
-    sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q --force "MISP.welcome_text_top" ""
-    sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q --force "MISP.welcome_text_bottom" ""
+    init_settings "optional"
+}
 
-    sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q "MISP.contact" "${ADMIN_EMAIL}"
-    # This is not necessary because we update the DB directly
-    # sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q "MISP.org" "${ADMIN_ORG}"
+# Some settings return a value from cake Admin getSetting even if not set in config.php and database.
+# This means we cannot rely on that tool which inspects both db and file.
+# Leaving this here though in case the serverSettings model for those odd settings is fixed one day.
+#setting_is_set() {
+#    local setting="$1"
+#    local current_value="$(sudo -u www-data /var/www/MISP/app/Console/cake Admin getSetting $setting)"
+#    local error_value="$(jq -r '.errorMessage' <<< $current_value)"
+#
+#    if [[ "$current_value" =~ ^\{.*\}$ && "$error_value" != "Value not set." && "$error_value" != Invalid* ]]; then
+#       return 0
+#    else
+#       return 1
+#    fi
+#}
 
-    sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q "MISP.log_client_ip" true
-    sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q "MISP.log_user_ips" true
-    sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q "MISP.log_user_ips_authkeys" true
+# Kludgy alternative to using cake Admin getSetting.
+setting_is_set_alt() {
+    local setting="$1"
+    local config_json=$(echo '<?php require_once "/var/www/MISP/app/Config/config.php"; echo json_encode($config, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>'|/usr/bin/php)
+    local db_settings_enabled=$(jq -e 'getpath(("MISP.system_setting_db" | split("."))) // false' <<< $config_json)
+    local setting_in_config_file=$(jq -e 'getpath(("'"$setting"'" | split("."))) != null' <<< $config_json) 
+    if $setting_in_config_file; then
+        return 0
+    elif $db_settings_enabled; then
+        local setting_in_db=$(echo "SELECT EXISTS(SELECT 1 FROM $MYSQL_DATABASE.system_settings WHERE setting = \"${setting}\");" | ${MYSQLCMD})
+        if [[ $setting_in_db -eq 1 ]]; then
+            return 0
+        fi
+    fi
+    return 1
+}
 
-    sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q "Plugin.Enrichment_timeout" 30
-    sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q "Plugin.Enrichment_hover_timeout" 5
+set_default_settings() {
+    local settings_json="$1"
+    local description="$2"
+
+    for setting in $(jq -r 'keys[]' <<< $settings_json); do
+        local default_value="$(jq -r '."'"$setting"'"["default_value"]' <<< $settings_json)"
+        local command_args="$(jq -r '."'"$setting"'"["command_args"] // ""' <<< $settings_json)"
+
+        set_safe_default "$setting" "$default_value" "$description" "$command_args"
+    done
+}
+
+enforce_env_settings() {
+    local settings_json="$1"
+    local description="$2"
+    for setting in $(jq -r 'keys[]' <<< $settings_json); do
+        local default_value="$(jq -r '."'"$setting"'"["default_value"]' <<< $settings_json)"
+        local command_args="$(jq -r '."'"$setting"'"["command_args"] // ""' <<< $settings_json)"
+        echo "Enforcing $description setting '$setting' to env var or default value '$default_value'..."
+        sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q $command_args "$setting" "$default_value"
+    done
+}
+
+set_safe_default() {
+    local setting="$1"
+    local default_value="$2"
+    local description="$3"
+    local command_args="$4"
+
+    if ! setting_is_set_alt "$setting"; then
+        echo "Updating unset $description setting '$setting' to '$default_value'..."
+        sudo -u www-data /var/www/MISP/app/Console/cake Admin setSetting -q $command_args "$setting" "$default_value"
+    fi
+}
+
+init_settings() {
+    local description="$1"
+    local enforced="/etc/misp-docker/${description}.envars.json"
+    local defaults="/etc/misp-docker/${description}.defaults.json"
+
+    if [[ -e "$enforced" ]]; then
+        echo "... enforcing env var settings"
+        local settings_json="$(envsubst < $enforced)"
+        enforce_env_settings "$settings_json" "$description"
+    fi
+
+    if [[ -e "$defaults" ]]; then
+        echo "... checking for unset default settings"
+        local settings_json="$(cat $defaults)"
+        set_default_settings "$settings_json" "$description"
+    fi
 }
 
 update_components() {
@@ -249,6 +358,13 @@ update_components() {
     sudo -u www-data /var/www/MISP/app/Console/cake Admin updateObjectTemplates "$CRON_USER_ID"
 }
 
+update_ca_certificates() {
+    # Upgrade host os certificates
+    update-ca-certificates
+    # Upgrade cake cacert.pem file from Mozilla project
+    echo "Updating /var/www/MISP/app/Lib/cakephp/lib/Cake/Config/cacert.pem..."
+    sudo -E -u www-data curl -s --etag-compare /var/www/MISP/app/Lib/cakephp/lib/Cake/Config/etag.txt --etag-save /var/www/MISP/app/Lib/cakephp/lib/Cake/Config/etag.txt https://curl.se/ca/cacert.pem -o /var/www/MISP/app/Lib/cakephp/lib/Cake/Config/cacert.pem
+}
 
 create_sync_servers() {
     if [ -z "$ADMIN_KEY" ]; then
@@ -294,34 +410,40 @@ create_sync_servers() {
 
         # Add sync server
         echo "... adding new sync server ${NAME} with organization id ${ORG_ID}"
-        JSON_DATA=$(echo "${!DATA}" | jq --arg org_id ${ORG_ID} 'del(.remote_org_uuid) | . + {remote_org_id: $org_id}')
+        JSON_DATA=$(echo "${!DATA}" | jq --arg org_id ${ORG_ID} 'del(.remote_org_uuid) | . + {remote_org_id: $org_id} | del(..|select(. == ""))')
         add_server ${BASE_URL} ${ADMIN_KEY} "$JSON_DATA" > /dev/null
     done
 }
 
-echo "MISP | Update CA certificates ..." && update-ca-certificates
+echo "MISP | Update CA certificates ..." && update_ca_certificates
+
+echo "MISP | Apply minimum configuration directives ..." && init_minimum_config
 
 echo "MISP | Initialize configuration ..." && init_configuration
 
 echo "MISP | Initialize workers ..." && init_workers
 
-echo "MISP | Configure GPG key ..." && configure_gnupg
+echo "MISP | Apply DB updates ..." && apply_updates
 
-echo "MISP | Apply updates ..." && apply_updates
+echo "MISP | Configure GPG key ..." && configure_gnupg
 
 echo "MISP | Init default user and organization ..." && init_user
 
 echo "MISP | Resolve critical issues ..." && apply_critical_fixes
 
+echo "MISP | Update components ..." && update_components
+
 echo "MISP | Resolve non-critical issues ..." && apply_optional_fixes
 
 echo "MISP | Create sync servers ..." && create_sync_servers
 
-echo "MISP | Update components ..." && update_components
-
 echo "MISP | Set Up OIDC ..." && set_up_oidc
 
 echo "MISP | Set Up LDAP ..." && set_up_ldap
+
+echo "MISP | Set Up AAD ..." && set_up_aad
+
+echo "MISP | Set Up Proxy ..." && set_up_proxy
 
 echo "MISP | Mark instance live"
 sudo -u www-data /var/www/MISP/app/Console/cake Admin live 1

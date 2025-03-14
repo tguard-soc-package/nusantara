@@ -9,9 +9,16 @@ import {
   Button,
   Divider,
   TextField,
+  Modal,
 } from "@mui/material";
 //import { useAlert
-import { ToastContainer, toast } from "react-toastify" 
+import { ToastContainer, toast } from "react-toastify";
+import "../codeeditor-index.css";
+
+import { FileCopy, Visibility, VisibilityOff } from "@mui/icons-material";
+import IconButton from "@mui/material/IconButton";
+import { Tooltip } from "@mui/material";
+import CloseIcon from "@mui/icons-material/Close";
 
 const Settings = (props) => {
   const { globalUrl, isLoaded, userdata, setUserData } = props;
@@ -39,35 +46,20 @@ const Settings = (props) => {
 
   // Used for error messages etc
   const [passwordFormMessage, setPasswordFormMessage] = useState("");
-
   const [firstrequest, setFirstRequest] = useState(true);
-
   const [userSettings, setUserSettings] = useState({});
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [apiKeyCopied, setApiKeyCopied] = useState(false);
 
-  /*
-	const [userdata.eth_info, setEthInfo] = useState(userdata.eth_info !== undefined && userdata.eth_info.account !== undefined && userdata.eth_info.account.length > 0 ? userdata.eth_info : {
-		"account": "",
-		"balance": "", 
-	})
-	*/
+  const [accountDeleteButtonClicked, setAccountDeleteButtonClicked] = useState(false);
 
-  /*
-	console.log(userdata.eth_info)
-	if (userdata.eth_info.account.length === 0 && userdata.eth_info !== undefined && userdata.eth_info.account !== undefined && userdata.eth_info.account.length > 0) {
-		setEthInfo(userdata.eth_info)
-	} else if (userdata.eth_info.balance.length > 0 && userdata.eth_info.parsed_balance === undefined) {
-		//console.log(window.ethereum)
-		//console.log(window.ethereum.utils.formatEther(userdata.eth_info.balance))
-		const parsed_balance = parseInt(userdata.eth_info.balance, 16)/1000000000000000000
-		console.log("Parsed balance: ", parsed_balance)
-		userdata.eth_info.parsed_balance = parsed_balance
-		userdata.eth_info.parsed_balance = parsed_balance
-		setEthInfo(userdata.eth_info)
-	} else if (userdata.eth_info !== undefined && userdata.eth_info.balance !== userdata.eth_info.balance) {
-		console.log("Updating balance: ", userdata.eth_info)
-		setEthInfo(userdata.eth_info)
-	}
-	*/
+  const handleCopyApiKey = () => {
+    navigator.clipboard.writeText(userSettings.apikey);
+    setApiKeyCopied(true);
+    setTimeout(() => {
+      setApiKeyCopied(false);
+    }, 2000);
+  }
 
   //Returns the value from a storage position at a given address.
   const isCloud =
@@ -117,6 +109,241 @@ const Settings = (props) => {
     }
 
     return currentOwner;
+  };
+
+  const handleAccountDelete = () => {
+    setAccountDeleteButtonClicked(true);
+  };
+
+  const DeleteAccountPopUp = () => {
+    const [userDeleteAccepted, setUserDeleteAccepted] = useState(false);
+    const [password, setPassword] = useState("");
+    const [showPassword, setShowPassword] = useState(false);
+    const [disabled, setDisabled] = useState(true);
+    const [open, setOpen] = useState(true);
+
+    const boxStyling = {
+      position: "relative",
+      top: "50%",
+      left: "50%",
+      transform: "translate(-50%, -50%)",
+      zIndex: "9999",
+      backgroundColor: "#1a1a1a",
+      color: "white",
+      padding: 20,
+      borderRadius: 5,
+      boxShadow: "0 0 10px rgba(0, 0, 0, 0.3)",
+      width: 430,
+      height: 430,
+    };
+
+    const closeIconButtonStyling = {
+      color: "white",
+      border: "none",
+      backgroundColor: "transparent",
+      marginLeft: "90%",
+      width: 20,
+      height: 20,
+      cursor: "pointer",
+    };
+
+    const handlePasswordVisibility = () => {
+      setShowPassword(!showPassword);
+    };
+
+    const buttonStyle = {
+      marginTop: 20,
+      height: 50,
+      border: "none",
+      width: "100%",
+      fontSize: 16,
+      backgroundColor: disabled ? "gray" : "red",
+      color: "white",
+      cursor: disabled === false && "pointer",
+    };
+    const checkboxStyle = {
+      position: "relative",
+      cursor: "pointer",
+      display: "inline-block",
+      width: 20,
+      height: 20,
+      backgroundColor: "#ccc",
+      borderRadius: 4,
+    };
+
+    const checkmarkStyle = {
+      position: "absolute",
+      top: "50%",
+      left: "50%",
+      transform: "translate(-50%, -50%)",
+      content: "",
+      width: 10,
+      height: 10,
+      backgroundColor: "#fff",
+      borderRadius: 2,
+      display: "none",
+    };
+
+
+    const handlePasswordChange = (e) => {
+      setPassword(e.target.value);
+    };
+
+    const handleCheckBoxEvent = () => {
+      setUserDeleteAccepted(!userDeleteAccepted);
+    };
+
+    useEffect(() => {
+      if (password.length > 8 && userDeleteAccepted) {
+        setDisabled(false);
+      } else {
+        setDisabled(true);
+      }
+    }, [password, userDeleteAccepted]);
+
+    function removeAllCookies() {
+      
+      var cookies = document.cookie.split(";");
+      for (var i = 0; i < cookies.length; i++) {
+        var cookie = cookies[i];
+        var eqPos = cookie.indexOf("=");
+        var name = eqPos > -1 ? cookie.substr(0, eqPos) : cookie;
+        document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/";
+      }
+    }
+
+    const handleDeleteAccount = () => {
+      const baseURL = globalUrl;
+      const userID = userdata.id;
+
+      const url = `${baseURL}/api/v1/users/${userID}/remove`;
+
+      fetch(url, {
+        mode: "cors",
+        method: "DELETE",
+        body: JSON.stringify({ password }),
+        credentials: "include",
+        crossDomain: true,
+        withCredentials: true,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      })
+        .then((response) => response.json())
+        .then((data) => {
+          if (data.success) {
+            toast.success(
+              "Your account delete successfully! redirecting in 3 sec.."
+            );
+            removeAllCookies();
+
+            window.location.pathname = "/";
+          } else {
+            toast.error(`${data.reason}`);
+          }
+        })
+        .catch((error) => {
+          console.error(
+            "There was a problem with your fetch operation:",
+            error
+          );
+        });
+    };
+
+    return (
+      <Modal open= {open} >
+      <div style={boxStyling}>
+        <button
+          style={closeIconButtonStyling}
+          onClick={() => setAccountDeleteButtonClicked(false)}
+        >
+          <CloseIcon />
+        </button>
+        <h1 style={{textAlign:"center", margin : "0 0 20px 0"}}>Account</h1>
+      {/* <div style={{paddingLeft: 15}} > */}
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            textAlign: "left",
+            // paddingLeft: 15
+            // marginLeft: 20
+          }}
+        >
+          <label>If you delete your account then:</label>
+          <ul style={{ textAlign: "left" }}>
+            <li>
+              <label>
+                Your Account information will be removed from our Database
+                permanently.
+              </label>
+            </li>
+            <li>
+              <label>This action cannot be reversed.</label>
+            </li>
+          </ul>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 10,
+            }}
+          >
+            <input
+              checked={userDeleteAccepted}
+              type="checkbox"
+              className="ais-RefinementList-checkbox"
+              onClick={handleCheckBoxEvent}
+            />
+            <label style={{ fontSize: "16px", color: "white" }}>
+              I have read the above information and I agree to it completely
+            </label>
+          </div>
+          <div
+            style={{
+              marginTop: 20,
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+            }}
+          >
+            <label>Enter password to delete your account</label>
+            <TextField
+                style={{
+                  backgroundColor: theme.palette.inputColor,
+                  flex: "1",
+                }}
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={handlePasswordChange}
+                required
+                placeholder="Password"
+                id="standard-required"
+                autoComplete="off"
+                InputProps={{
+                  endAdornment: (
+                    <IconButton
+                      onClick={handlePasswordVisibility}
+                      style={{color:"white"}}
+                    >
+                      {showPassword ? <VisibilityOff /> : <Visibility />}
+                    </IconButton>
+                  ),
+                }}
+              />
+          </div>
+          <button
+            style={buttonStyle}
+            disabled={disabled}
+            onClick={handleDeleteAccount}
+          >
+            Delete Account
+          </button>
+        </div>
+      </div>
+      </Modal>
+    );
   };
 
   const onPasswordChange = () => {
@@ -289,59 +516,6 @@ const Settings = (props) => {
       //}
     }
   };
-
-  // const registerProviders = (userdata) => {
-  //   // Register hooks here
-  //   detectEthereumProvider().then((provider) => {
-  //     if (provider) {
-  //       if (!provider.isMetaMask) {
-  //         toast("Only MetaMask is supported as of now.");
-  //         return;
-  //       }
-
-  //       // Find the ethereum network
-  //       // Get the users' account(s)
-  //       //toast("Connecting to MetaMask")
-  //       //console.log("Connected: ", provider.isConnected())
-
-  //       if (!provider.isConnected()) {
-  //         toast("Metamask is not connected.");
-  //         return;
-  //       }
-
-  //       provider.on("message", (event) => {
-  //         toast("Ethereum message: ", event);
-  //       });
-
-  //       provider.on("chainChanged", (chainId) => {
-  //         console.log("Changed chain to: ", chainId);
-
-  //         const method = "eth_getBalance";
-  //         const params = [userdata.eth_info.account, "latest"];
-  //         provider
-  //           .request({
-  //             method: method,
-  //             params,
-  //           })
-  //           .then((result) => {
-  //             console.log("Got result: ", result);
-  //             if (result !== undefined && result !== null) {
-  //               userdata.eth_info.balance = result;
-  //               userdata.eth_info.parsed_balance = result / 1000000000000000000;
-  //               console.log("INFO: ", userdata);
-  //               setUserData(userdata);
-  //             } else {
-  //               toast("Couldn't find balance: ", result);
-  //             }
-  //           })
-  //           .catch((error) => {
-  //             // If the request fails, the Promise will reject with an error.
-  //             toast("Failed getting info from ethereum API: " + error);
-  //           });
-  //       });
-  //     }
-  //   });
-  // };
 
   // This should "always" have data
   useEffect(() => {
@@ -520,7 +694,7 @@ const Settings = (props) => {
         >
           What is the API key used for?
         </a>
-        <TextField
+        {/* <TextField
           style={{ backgroundColor: theme.palette.inputColor, flex: "1" }}
           InputProps={{
             style: {
@@ -537,7 +711,43 @@ const Settings = (props) => {
           id="standard-required"
           margin="normal"
           variant="outlined"
-        />
+        /> */}
+        <TextField
+        style={{ backgroundColor: theme.palette.inputColor, flex: "1" }}
+        InputProps={{
+          style: {
+            height: "50px",
+            color: "white",
+          },
+          endAdornment: (
+            <>
+            <Tooltip title={showApiKey ? "Hide API Key" : "Show API Key"}>
+              <IconButton
+                onClick={() => setShowApiKey(!showApiKey)}
+              >
+                {showApiKey ? <VisibilityOff /> : <Visibility />}
+              </IconButton>
+            </Tooltip>
+            <Tooltip title={apiKeyCopied ? "API Key copied!" : "Copy API Key"}>
+              <IconButton
+                onClick={handleCopyApiKey}
+              >
+                <FileCopy />
+              </IconButton>
+            </Tooltip>
+          </>
+          ),
+        }}
+        color="primary"
+        value={showApiKey ? userSettings.apikey : '*'.repeat(36)} // Show API key if showApiKey is true, else show asterisks
+        required
+        disabled
+        fullWidth
+        placeholder="APIKEY"
+        id="standard-required"
+        margin="normal"
+        variant="outlined"
+      />
         <Button
           style={{ width: "100%", height: "40px", marginTop: "10px" }}
           variant="outlined"
@@ -728,9 +938,16 @@ const Settings = (props) => {
         >
           Submit password change
         </Button>
-        <h3>{passwordFormMessage}</h3>
-        <Divider style={{ marginTop: "40px" }} />
-        <h2>Creator Incentive Program</h2>
+        <h3>{passwordFormMessage}</h3> 
+
+
+        {isCloud && (
+          <>
+            <Divider style={{ marginTop: "40px" }} />
+            <h2>Creator Incentive Program</h2>
+          </>
+        )}
+
         <div style={{ display: runFlex ? "flex" : "", width: "100%" }}>
 			<div>
 			{isCloud ?
@@ -816,6 +1033,22 @@ const Settings = (props) => {
           </div>
         </div>
 
+	  	<h2>Danger Area</h2>
+        <Button
+          style={{
+            width: "100%",
+            height: "60px",
+            marginTop: "10px",
+            backgroundColor: "#d52b2b",
+            color: "white",
+          }}
+          // variant="contained"
+          // color="primary"
+          onClick={handleAccountDelete}
+        >
+          Delete Account
+        </Button>
+
         {loadedValidationWorkflows !== undefined &&
         loadedValidationWorkflows !== null
           ? loadedValidationWorkflows.map((data, index) => {
@@ -827,6 +1060,7 @@ const Settings = (props) => {
             })
           : null}
       </Paper>
+      {accountDeleteButtonClicked && <DeleteAccountPopUp/>}
     </div>
   );
 
@@ -884,47 +1118,47 @@ const Settings = (props) => {
 
 		console.log("redirect: ", redirectUri)
 
-		const client_id = "3d272b1b782b100b1e61"
-		const username = userdata.id;
-		const scopes = "read:user";
+    const client_id = "3d272b1b782b100b1e61"
+    const username = userdata.id;
+    const scopes = "read:user";
 
-		const url = `https://github.com/login/oauth/authorize?access_type=offline&prompt=consent&client_id=${client_id}&redirect_uri=${redirectUri}&response_type=code&scope=${scopes}&state=username%3D${username}%26type%3Dgithub`
+    const url = `https://github.com/login/oauth/authorize?access_type=offline&prompt=consent&client_id=${client_id}&redirect_uri=${redirectUri}&response_type=code&scope=${scopes}&state=username%3D${username}%26type%3Dgithub`
 
-		console.log("URL: ", url);
+    console.log("URL: ", url);
 
-		var newwin = window.open(url, "", "width=800,height=600");
+    var newwin = window.open(url, "", "width=800,height=600");
 
-		// Check whether we got a callback somewhere
-		//var id = setInterval(function () {
-		//	fetch(
-		//		globalUrl + "/api/v1/triggers/gmail/" + selectedTrigger.id,
-		//		{
-		//			method: "GET",
-		//			headers: { "content-type": "application/json" },
-		//			credentials: "include",
-		//		}
-		//	)
-		//		.then((response) => {
-		//			if (response.status !== 200) {
-		//				throw new Error("No trigger info :o!");
-		//			}
+    // Check whether we got a callback somewhere
+    //var id = setInterval(function () {
+    //	fetch(
+    //		globalUrl + "/api/v1/triggers/gmail/" + selectedTrigger.id,
+    //		{
+    //			method: "GET",
+    //			headers: { "content-type": "application/json" },
+    //			credentials: "include",
+    //		}
+    //	)
+    //		.then((response) => {
+    //			if (response.status !== 200) {
+    //				throw new Error("No trigger info :o!");
+    //			}
 
-		//			return response.json();
-		//		})
-		//		.then((responseJson) => {
-		//			console.log("RESPONSE: ");
-		//			setTriggerAuthentication(responseJson);
-		//			clearInterval(id);
-		//			newwin.close();
-		//			setGmailFolders();
-		//		})
-		//		.catch((error) => {
-		//			console.log(error.toString());
-		//		});
-		//}, 2500);
+    //			return response.json();
+    //		})
+    //		.then((responseJson) => {
+    //			console.log("RESPONSE: ");
+    //			setTriggerAuthentication(responseJson);
+    //			clearInterval(id);
+    //			newwin.close();
+    //			setGmailFolders();
+    //		})
+    //		.catch((error) => {
+    //			console.log(error.toString());
+    //		});
+    //}, 2500);
 
-		//saveWorkflow(workflow);
-	}
+    //saveWorkflow(workflow);
+  }
 
   const loadedCheck =
     isLoaded && !firstrequest ? (

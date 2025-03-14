@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-#
 #  IRIS Source Code
 #  Copyright (C) 2021 - Airbus CyberSecurity (SAS) - DFIR-IRIS Team
 #  ir@cyberactionlab.net - contact@dfir-iris.org
@@ -81,7 +79,7 @@ def case_list_rfiles(caseid):
     crf = get_rfiles(caseid)
 
     ret = {
-        "evidences": [row._asdict() for row in crf],
+        "evidences": CaseEvidenceSchema().dump(crf, many=True),
         "state": get_evidences_state(caseid=caseid)
     }
 
@@ -111,8 +109,8 @@ def case_add_rfile(caseid):
         evidence = evidence_schema.load(request_data)
 
         crf = add_rfile(evidence=evidence,
-                          user_id=current_user.id,
-                          caseid=caseid
+                        user_id=current_user.id,
+                        caseid=caseid
                          )
 
         crf = call_modules_hook('on_postload_evidence_create', data=crf, caseid=caseid)
@@ -124,7 +122,7 @@ def case_add_rfile(caseid):
         return response_error("Unable to create task for internal reasons")
 
     except marshmallow.exceptions.ValidationError as e:
-        return response_error(msg="Data error", data=e.messages, status=400)
+        return response_error(msg="Data error", data=e.messages)
 
 
 @case_rfiles_blueprint.route('/case/evidences/<int:cur_id>', methods=['GET'])
@@ -192,7 +190,7 @@ def case_edit_rfile(cur_id, caseid):
         return response_error("Unable to update task for internal reasons")
 
     except marshmallow.exceptions.ValidationError as e:
-        return response_error(msg="Data error", data=e.messages, status=400)
+        return response_error(msg="Data error", data=e.messages)
 
 
 @case_rfiles_blueprint.route('/case/evidences/delete/<int:cur_id>', methods=['POST'])
@@ -271,7 +269,7 @@ def case_comment_evidence_add(cur_id, caseid):
         return response_success("Event commented", data=comment_schema.dump(comment))
 
     except marshmallow.exceptions.ValidationError as e:
-        return response_error(msg="Data error", data=e.normalized_messages(), status=400)
+        return response_error(msg="Data error", data=e.normalized_messages())
 
 
 @case_rfiles_blueprint.route('/case/evidences/<int:cur_id>/comments/<int:com_id>', methods=['GET'])

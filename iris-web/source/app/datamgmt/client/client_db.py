@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-#
 #  IRIS Source Code
 #  Copyright (C) 2021 - Airbus CyberSecurity (SAS)
 #  ir@cyberactionlab.net
@@ -18,7 +16,7 @@
 #  along with this program; if not, write to the Free Software Foundation,
 #  Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 import marshmallow
-from sqlalchemy import func
+from sqlalchemy import func, and_
 from typing import List
 
 from app import db
@@ -27,18 +25,30 @@ from app.datamgmt.exceptions.ElementExceptions import ElementNotFoundException
 from app.models import Cases
 from app.models import Client
 from app.models import Contact
-from app.models.authorization import User
+from app.models.authorization import User, UserClient
 from app.schema.marshables import ContactSchema
 from app.schema.marshables import CustomerSchema
 
 
-def get_client_list() -> List[Client]:
+def get_client_list(current_user_id: int = None,
+                    is_server_administrator: bool = False) -> List[dict]:
+    if not is_server_administrator:
+        filter = and_(
+            Client.client_id == UserClient.client_id,
+            UserClient.user_id == current_user_id
+        )
+    else:
+        filter = and_()
+
     client_list = Client.query.with_entities(
         Client.name.label('customer_name'),
         Client.client_id.label('customer_id'),
         Client.client_uuid.label('customer_uuid'),
         Client.description.label('customer_description'),
-        Client.sla.label('customer_sla')
+        Client.sla.label('customer_sla'),
+        Client.custom_attributes
+    ).filter(
+        filter
     ).all()
 
     output = [c._asdict() for c in client_list]
@@ -57,7 +67,8 @@ def get_client_api(client_id: str) -> Client:
         Client.client_id.label('customer_id'),
         Client.client_uuid.label('customer_uuid'),
         Client.description.label('customer_description'),
-        Client.sla.label('customer_sla')
+        Client.sla.label('customer_sla'),
+        Client.custom_attributes
     ).filter(Client.client_id == client_id).first()
 
     output = None
@@ -198,3 +209,9 @@ def delete_client(client_id: int) -> None:
         raise ElementInUseException('A currently referenced customer cannot be deleted')
 
 
+def get_case_client(case_id: int) -> Client:
+    client = Cases.query.filter(case_id == case_id).with_entities(
+        Cases.client_id
+    ).first()
+
+    return client

@@ -8,7 +8,10 @@ import Workflows from "./views/Workflows";
 import GettingStarted from "./views/GettingStarted";
 import AngularWorkflow from "./views/AngularWorkflow.jsx";
 
-import Header from "./components/Header.jsx";
+import Header from "./components/NewHeader.jsx";
+import HealthPage from "./components/HealthPage.jsx";
+
+//import Header from "./components/Header.jsx";
 import theme from "./theme";
 import Apps from "./views/Apps";
 import AppCreator from "./views/AppCreator";
@@ -36,8 +39,8 @@ import UpdateAuthentication from "./views/UpdateAuthentication.jsx";
 import FrameworkWrapper from "./views/FrameworkWrapper.jsx";
 import ScrollToTop from "./components/ScrollToTop";
 import AlertTemplate from "./components/AlertTemplate";
-import { useAlert, positions, Provider } from "react-alert";
 import { isMobile } from "react-device-detect";
+import RuntimeDebugger from "./components/RuntimeDebugger.jsx"
 
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -55,10 +58,9 @@ if (window.location.port === "3000") {
 
 // Development on Github Codespaces
 if (globalUrl.includes("app.github.dev")) {
-	//globalUrl = globalUrl.replace("3000", "5001")
-	globalUrl = "https://frikky-shuffle-5gvr4xx62w64-5001.preview.app.github.dev"
+	globalUrl = globalUrl.replace("-3000.", "-5001.")
+	globalUrl = globalUrl.replace("-3001.", "-5001.")
 }
-//console.log("global: ", globalUrl)
 
 const App = (message, props) => {
 
@@ -158,10 +160,6 @@ const App = (message, props) => {
 
   // Dumb for content load (per now), but good for making the site not suddenly reload parts (ajax thingies)
 
-  const options = {
-    timeout: 9000,
-    position: positions.BOTTOM_LEFT,
-  };
 
 	const handleFirstInteraction = (event) => {
 		console.log("First interaction: ", event)
@@ -180,34 +178,45 @@ const App = (message, props) => {
 					curpath={curpath}
           setCurpath={setCurpath}
         />
-				{!isLoaded ? null : 
-					userdata.chat_disabled === true ? null : 
-						<Drift 
-							appId="zfk9i7w3yizf" 
-							attributes={{
-								name: userdata.username === undefined || userdata.username === null ? "OSS user" : `OSS ${userdata.username}`,
-							}}
-							eventHandlers={[
-								{ 
-									event: "conversation:firstInteraction", 
-									function: handleFirstInteraction 
-								},
-							]}
-						/>
-				}
-        <Header
-          notifications={notifications}
-          setNotifications={setNotifications}
-          checkLogin={checkLogin}
-          cookies={cookies}
-          removeCookie={removeCookie}
-          isLoaded={isLoaded}
-          globalUrl={globalUrl}
-          setIsLoggedIn={setIsLoggedIn}
-          isLoggedIn={isLoggedIn}
-          userdata={userdata}
-          {...props}
-        />
+		{!isLoaded ? null : 
+			userdata.chat_disabled === true ? null : 
+				<Drift 
+					appId="zfk9i7w3yizf" 
+					attributes={{
+						name: userdata.username === undefined || userdata.username === null ? "OSS user" : `OSS ${userdata.username}`,
+					}}
+					eventHandlers={[
+						{ 
+							event: "conversation:firstInteraction", 
+							function: handleFirstInteraction 
+						},
+					]}
+				/>
+		}
+
+		<div style={{ minHeight: 68, maxHeight: 68, }}>
+			<Header
+				billingInfo={{}}
+
+				notifications={notifications}
+				setNotifications={setNotifications}
+				checkLogin={checkLogin}
+				cookies={cookies}
+				removeCookie={removeCookie}
+				isLoaded={isLoaded}
+				globalUrl={globalUrl}
+				setIsLoggedIn={setIsLoggedIn}
+				isLoggedIn={isLoggedIn}
+				userdata={userdata}
+
+				curpath={curpath}
+				serverside={false}
+				isMobile={false}
+
+				{...props}
+			/>
+		</div>
+		
 				{/*
         <div style={{ height: 60 }} />
 				*/}
@@ -243,6 +252,7 @@ const App = (message, props) => {
         	      setCookie={setCookie}
         	      cookies={cookies}
         	      checkLogin={checkLogin}
+				  notifications={notifications}
         	      {...props}
         	    />
         	  }
@@ -264,6 +274,38 @@ const App = (message, props) => {
         	    />
         	  }
         	/>
+			<Route
+				exact
+				path="/health"
+				element={
+					<HealthPage
+						cookies={cookies}
+						removeCookie={removeCookie}
+						isLoaded={isLoaded}
+						isLoggedIn={isLoggedIn}
+						globalUrl={globalUrl}
+						cookies={cookies}
+						userdata={userdata}
+						{...props}
+					/>
+				}
+			/>
+			<Route
+				exact
+				path="/status"
+				element={
+					<HealthPage
+						cookies={cookies}
+						removeCookie={removeCookie}
+						isLoaded={isLoaded}
+						isLoggedIn={isLoggedIn}
+						globalUrl={globalUrl}
+						cookies={cookies}
+						userdata={userdata}
+						{...props}
+					/>
+				}
+			/>
         	{userdata.id !== undefined ? (
         	  <Route
         	    exact
@@ -405,6 +447,8 @@ const App = (message, props) => {
         	    />
         	  }
         	/>
+			<Route exact path="/debug" element={<RuntimeDebugger userdata={userdata} globalUrl={globalUrl} /> }  />
+			<Route exact path="/workflows/debug" element={<RuntimeDebugger userdata={userdata} globalUrl={globalUrl} /> }  />
         	<Route
         	  exact
         	  path="/workflows/:key"
@@ -562,9 +606,7 @@ const App = (message, props) => {
 	  <CssBaseline />
       <CookiesProvider>
         <BrowserRouter>
-          <Provider template={AlertTemplate} {...options}>
-            {includedData}
-          </Provider>
+		  {includedData}
         </BrowserRouter>
 		<ToastContainer 
 			position="bottom-center"

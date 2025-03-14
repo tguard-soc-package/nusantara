@@ -1,7 +1,7 @@
-version: '3'
+#version: '3'
 services:
   frontend:
-    image: ghcr.io/shuffle/shuffle-frontend:latest
+    image: ghcr.io/shuffle/shuffle-frontend:1.4.2
     container_name: shuffle-frontend
     hostname: shuffle-frontend
     ports:
@@ -9,14 +9,13 @@ services:
       - "${FRONTEND_PORT_HTTPS}:443"
     networks:
       - shuffle
-      - shared-network
     environment:
       - BACKEND_HOSTNAME=${BACKEND_HOSTNAME}
     restart: unless-stopped
     depends_on:
       - backend
   backend:
-    image: ghcr.io/shuffle/shuffle-backend:latest
+    image: ghcr.io/shuffle/shuffle-backend:1.4.2
     container_name: shuffle-backend
     hostname: ${BACKEND_HOSTNAME}
     # Here for debugging:
@@ -24,7 +23,6 @@ services:
       - "${BACKEND_PORT}:5001"
     networks:
       - shuffle
-      - shared-network
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${SHUFFLE_APP_HOTLOAD_LOCATION}:/shuffle-apps:z
@@ -36,15 +34,16 @@ services:
       - SHUFFLE_FILE_LOCATION=/shuffle-files
     restart: unless-stopped
   orborus:
-    image: ghcr.io/shuffle/shuffle-orborus:latest
+    image: ghcr.io/shuffle/shuffle-orborus:1.4.0
     container_name: shuffle-orborus
     hostname: shuffle-orborus
     networks:
       - shuffle
-      - shared-network
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
+      - SHUFFLE_APP_SDK_TIMEOUT=300
+      - SHUFFLE_ORBORUS_EXECUTION_CONCURRENCY=7 # The amount of concurrent executions Orborus can handle. 
       #- DOCKER_HOST=tcp://docker-socket-proxy:2375
       - ENVIRONMENT_NAME=${ENVIRONMENT_NAME}
       - BASE_URL=http://${OUTER_HOSTNAME}:5001
@@ -56,14 +55,49 @@ services:
       - HTTPS_PROXY=${HTTPS_PROXY}
       - SHUFFLE_PASS_WORKER_PROXY=${SHUFFLE_PASS_WORKER_PROXY}
       - SHUFFLE_PASS_APP_PROXY=${SHUFFLE_PASS_APP_PROXY}
+      - SHUFFLE_STATS_DISABLED=true
     restart: unless-stopped
     security_opt:
       - seccomp:unconfined
+  opensearch:
+    image: opensearchproject/opensearch:2.14.0
+    hostname: shuffle-opensearch
+    container_name: shuffle-opensearch
+    env_file: .env
+    environment:
+      - "OPENSEARCH_JAVA_OPTS=-Xms2048m -Xmx2048m" # minimum and maximum Java heap size, recommend setting both to 50% of system RAM
+      - bootstrap.memory_lock=true
+      - DISABLE_PERFORMANCE_ANALYZER_AGENT_CLI=true
+      - cluster.initial_master_nodes=shuffle-opensearch
+      - cluster.routing.allocation.disk.threshold_enabled=false
+      - cluster.name=shuffle-cluster
+      - node.name=shuffle-opensearch
+      - node.store.allow_mmap=false
+      - discovery.seed_hosts=shuffle-opensearch
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=${SHUFFLE_OPENSEARCH_PASSWORD}
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536 
+        hard: 65536
+    volumes:
+      - ${DB_LOCATION}:/usr/share/opensearch/data:z
+    ports:
+      - 9201:9201
+    networks:
+      - shuffle
+    restart: unless-stopped
 
   #memcached:
-  #  image: docker.io/bitnami/memcached:1
+  #  image: memcached:latest
   #  container_name: shuffle-cache
   #  hostname: shuffle-cache
+  #  mem_limit: 1024m
+  #  environment:
+  #    - MEMCACHED_MEMORY=1024
+  #    - MEMCACHED_MAX_CONNECTIONS=2500
   #  ports:
   #    - 11211:11211
   

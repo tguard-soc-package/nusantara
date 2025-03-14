@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-#
 #  IRIS Source Code
 #  Copyright (C) 2021 - Airbus CyberSecurity (SAS)
 #  ir@cyberactionlab.net
@@ -276,7 +274,8 @@ def get_case_task_comment(task_id, comment_id):
         User.name,
         User.user
     ).join(
-        TaskComments.comment,
+        TaskComments.comment
+    ).join(
         Comments.user
     ).first()
 
